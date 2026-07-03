@@ -92,6 +92,8 @@ class OverlayMasterWindow(OverlayWindow):
         p = self._prefs
         self._linked: dict = {}
         self._vis_checks: dict = {}  # key → QCheckBox for Show/Hide rows
+        self._watcher_status_label: QLabel | None = None
+        self._watcher_status_timer: QTimer | None = None
 
         # ── Title ──────────────────────────────────────────────────────────────
         title_label = QLabel(self.title, self._content)
@@ -121,11 +123,15 @@ class OverlayMasterWindow(OverlayWindow):
             char_edit.setText(p.character_name)
 
         def _save_char():
+            name = char_edit.text().strip()
+            char_edit.setText(name)
             if p:
-                p.character_name = char_edit.text()
+                p.character_name = name
                 p.save()
+            self._notify_all("apply_character_name", name)
 
         char_edit.editingFinished.connect(_save_char)
+        char_edit.returnPressed.connect(_save_char)
         char_l.addWidget(char_edit, 1)
         self._layout.addWidget(char_row)
 
@@ -174,6 +180,16 @@ class OverlayMasterWindow(OverlayWindow):
         browse_btn.clicked.connect(_browse_log_folder)
         log_l.addWidget(browse_btn)
         self._layout.addWidget(log_row)
+
+        # Live watcher status for troubleshooting auto-detect and active file.
+        watcher_status = QLabel("Log Watcher: waiting for watcher...")
+        watcher_status.setStyleSheet(
+            "color: rgba(255,255,255,180); font-size: 10px; background: transparent;"
+        )
+        watcher_status.setWordWrap(True)
+        watcher_status.setContentsMargins(4, 0, 4, 2)
+        self._watcher_status_label = watcher_status
+        self._layout.addWidget(watcher_status)
 
         # ── Player retention row ─────────────────────────────────────────────
         keep_row = QWidget()
@@ -2627,9 +2643,64 @@ class OverlayMasterWindow(OverlayWindow):
             if fn:
                 fn(value)
 
+    def _notify_all(self, method: str, value) -> None:
+        """Forward a live setting change to all linked overlays."""
+        for win in self._linked.values():
+            fn = getattr(win, method, None)
+            if fn:
+                try:
+                    fn(value)
+                except Exception:
+                    # Keep broadcasting even if one overlay fails to refresh.
+                    continue
+
     def receive_watcher(self, watcher) -> None:
         """Store the LogWatcher so the browse button can redirect it."""
         self._watcher = watcher
+
+        # Refresh status when watcher state changes.
+        watcher.session_reset.connect(self._refresh_watcher_status)
+        watcher.fight_opened.connect(lambda _fight: self._refresh_watcher_status())
+        watcher.fight_closed.connect(lambda _fight: self._refresh_watcher_status())
+        watcher.fight_updated.connect(lambda _fight: self._refresh_watcher_status())
+
+        # Also poll periodically because active file can change between signals.
+        if self._watcher_status_timer is None:
+            self._watcher_status_timer = QTimer(self)
+            self._watcher_status_timer.setInterval(1000)
+            self._watcher_status_timer.timeout.connect(self._refresh_watcher_status)
+            self._watcher_status_timer.start()
+
+        self._refresh_watcher_status()
+
+    def _refresh_watcher_status(self) -> None:
+        lbl = self._watcher_status_label
+        if lbl is None:
+            return
+
+        def _set_status_style(color: str) -> None:
+            lbl.setStyleSheet(
+                f"color: {color}; font-size: 10px; background: transparent;"
+            )
+
+        watcher = getattr(self, "_watcher", None)
+        if watcher is None:
+            _set_status_style("rgba(255,255,255,180)")
+            lbl.setText("Log Watcher: waiting for watcher...")
+            return
+
+        log_dir = getattr(watcher, "log_dir", None)
+        active_file = getattr(watcher, "current_file", None)
+
+        dir_text = str(log_dir) if log_dir is not None else "(auto-detect pending)"
+        file_text = str(active_file.name) if active_file is not None else "(none)"
+        if log_dir is None:
+            _set_status_style("#ff8080")
+        elif active_file is None:
+            _set_status_style("#ffd166")
+        else:
+            _set_status_style("#7bd88f")
+        lbl.setText(f"Log Watcher: dir={dir_text} | file={file_text}")
 
     def link_overlays(
         self,
@@ -2673,6 +2744,12 @@ class OverlayMasterWindow(OverlayWindow):
             win_name = _key_to_win_name.get(key)
             if win_name and win_name in self._vis_obs_dict:
                 self._vis_obs_dict[win_name].subscribe(_make_sync_cb(cb))
+
+        p = self._prefs
+        self._notify_all(
+            "apply_character_name",
+            (p.character_name.strip() if p and p.character_name else ""),
+        )
 
 
 # ── stat progress bar ────────────────────────────────────────────────────────

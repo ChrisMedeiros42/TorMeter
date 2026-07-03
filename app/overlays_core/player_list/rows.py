@@ -135,6 +135,10 @@ class PlayerRow(QWidget):
         self._name_col_color = c
         self._update_name_style()
 
+    def set_is_me(self, is_me: bool) -> None:
+        self._is_me = is_me
+        self.update()
+
     # ── score helpers ─────────────────────────────────────────────────────────
     def _update_score_style(self):
         self._score_lbl.setStyleSheet(
@@ -393,6 +397,10 @@ class _SummaryPlayerRow(QWidget):
     def set_name_col_color(self, c: str) -> None:
         self._name_col_color = c
         self._update_name_style()
+
+    def set_is_me(self, is_me: bool) -> None:
+        self._is_me = is_me
+        self.update()
 
     # ── score ─────────────────────────────────────────────────────────────────
     def _update_score_style(self):

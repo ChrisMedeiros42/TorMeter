@@ -1,9 +1,9 @@
 # ◢▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◣
-# ▧ - Lunar Edge Games                                        ▧
-# ▧ - Tor Meter                                               ▧
+# ▧ - Lunar Edge Games                                          ▧
+# ▧ - Tor Meter                                                 ▧
 # ▧▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▧
-# ▧ - Module: Main                                            ▧
-# ▧ - Component: Init                                         ▧
+# ▧ - Module: Main                                              ▧
+# ▧ - Component: Init                                           ▧
 # ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
 
 # LEG TorMeter Package Initialization

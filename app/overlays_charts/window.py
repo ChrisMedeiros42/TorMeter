@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QWidget
 from app.combat_session import CombatSession, Fight, PlayerFightStats
 from app.log_parser import APPLY_EFFECT, DAMAGE, HEAL, PLAYER
 from app.log_watcher import LogWatcher
+from app.overlays_shared.player_match import player_name_matches, player_stats_matches
 from app.overlays_shared.widgets import _ComboArrowNav, _LocalPlayerFooter, _PlayerFilterButton
 from app.session_loader import SessionLoader
 from app.window import OverlayWindow
@@ -188,7 +189,7 @@ class ChartsOverlay(OverlayWindow):
         )
         if self._my_name:
             stats = next(
-                (s for s in fight.player_stats.values() if s.name == self._my_name),
+                (s for s in fight.player_stats.values() if player_stats_matches(self._my_name, s)),
                 None,
             )
             self._footer.update_stats(stats, fight.duration_s)
@@ -395,7 +396,8 @@ class ChartsOverlay(OverlayWindow):
             labels.append(str(sec))
 
         player_series: dict[str, tuple[bool, list[float | None]]] = {
-            name: (name == self._my_name, vals) for name, vals in series.items()
+            name: (player_name_matches(self._my_name, name), vals)
+            for name, vals in series.items()
         }
         return player_series, labels
 
@@ -421,7 +423,7 @@ class ChartsOverlay(OverlayWindow):
         all_names: dict[str, bool] = {}
         for fight in fights:
             for stats in fight.player_stats.values():
-                all_names[stats.name] = stats.name == self._my_name
+                all_names[stats.name] = player_name_matches(self._my_name, stats.name)
         # Build per-player series
         player_series: dict[str, tuple[bool, list[float | None]]] = {}
         for name, is_me in all_names.items():
@@ -474,7 +476,7 @@ class ChartsOverlay(OverlayWindow):
                     f.duration_s for f in session.fights if aid in f.player_stats
                 )
                 val = _get_stat(agg, stat_label, total_dur)
-                is_me = agg.name == self._my_name
+                is_me = player_name_matches(self._my_name, agg.name)
                 raw.append((agg.name, val, is_me))
             raw.sort(key=lambda x: x[1], reverse=True)
             return raw
@@ -509,7 +511,7 @@ class ChartsOverlay(OverlayWindow):
         raw = []
         for stats in fight.player_stats.values():
             val = _get_stat(stats, stat_label, dur)
-            raw.append((stats.name, val, stats.name == self._my_name))
+            raw.append((stats.name, val, player_name_matches(self._my_name, stats.name)))
         raw.sort(key=lambda x: x[1], reverse=True)
         return raw
 
@@ -527,7 +529,7 @@ class ChartsOverlay(OverlayWindow):
                 f.duration_s for f in session.fights if aid in f.player_stats
             )
             val = _get_stat(agg, stat_label, total_dur)
-            is_me = agg.name == self._my_name
+            is_me = player_name_matches(self._my_name, agg.name)
             raw.append((agg.name, val, is_me))
         raw.sort(key=lambda x: x[1], reverse=True)
         return raw
@@ -595,6 +597,20 @@ class ChartsOverlay(OverlayWindow):
             self._fight_combo,
         ):
             combo.setStyleSheet(combo_style)
+
+    def apply_character_name(self, name: str) -> None:
+        self._my_name = (name or "").strip() or None
+
+        if self._live_fight is not None and self._my_name is not None:
+            stats = next(
+                (s for s in self._live_fight.player_stats.values() if player_stats_matches(self._my_name, s)),
+                None,
+            )
+            self._footer.update_stats(stats, self._live_fight.duration_s)
+        else:
+            self._footer.update_stats(None, 1.0)
+
+        self._refresh_chart()
 
     def paintEvent(self, event):
         painter = QPainter(self)

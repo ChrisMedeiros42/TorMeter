@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QSizePolicy, QVBoxLa
 
 from app.combat_session import Fight, PlayerFightStats
 from app.constants import fmt_num
+from app.overlays_shared.player_match import player_name_matches, player_stats_matches
 from app.overlays_shared.widgets import _LocalPlayerFooter
 from app.window import OverlayWindow
 
@@ -82,7 +83,7 @@ class _PlayerListOverlay(OverlayWindow):
                 value=value,
                 total=total,
                 score=score,
-                is_me=(name == my_name),
+                is_me=player_name_matches(my_name, name),
                 name_size=name_size,
                 name_color=name_color,
                 score_show=score_show,
@@ -137,6 +138,7 @@ class _PlayerListOverlay(OverlayWindow):
         # State for live updates
         self._my_account_id: str | None = None
         self._show_companions: bool = _pv(f"{g}_show_companions", False)
+        self._last_fight: Fight | None = None
         self._player_last_seen_wall: dict[str, float] = {}  # account_id → monotonic
         self._timeout_timer = QTimer(self)
         self._timeout_timer.setInterval(2000)
@@ -188,6 +190,7 @@ class _PlayerListOverlay(OverlayWindow):
         """
         Refresh player rows and footer from the current live fight.
         """
+        self._last_fight = fight
         p = self._prefs
         my_name = (p.character_name if p and p.character_name else "") or None
 
@@ -259,7 +262,7 @@ class _PlayerListOverlay(OverlayWindow):
         inner = getattr(self, "_inner_layout", None)
         row_scores: dict[object, float] = {}
         for aid, name, val, raw_total, score in entries:
-            is_me = name == my_name
+            is_me = player_name_matches(my_name, name)
             row = next(
                 (
                     r
@@ -298,7 +301,8 @@ class _PlayerListOverlay(OverlayWindow):
         # Update footer for local player
         if my_name:
             my_stats = next(
-                (s for s in fight.player_stats.values() if s.name == my_name), None
+                (s for s in fight.player_stats.values() if player_stats_matches(my_name, s)),
+                None,
             )
             self._footer.update_stats(my_stats, duration_s)
         self._resize_to_content()
@@ -310,7 +314,7 @@ class _PlayerListOverlay(OverlayWindow):
         p = self._prefs
         my_name = (p.character_name if p and p.character_name else "") if p else None
         for row in list(self._rows):
-            if row._name_lbl.text() == my_name:
+            if player_name_matches(my_name, row._name_lbl.text()):
                 # Keep the local player row; just blank its values
                 row._bar.update_data(0.0, 1.0)
                 row._score_lbl.setText("")
@@ -319,6 +323,7 @@ class _PlayerListOverlay(OverlayWindow):
             row.deleteLater()
             self._rows.remove(row)
         self._player_last_seen_wall.clear()
+        self._last_fight = None
         # Keep footer visible with last known stats; they'll update on next fight
         self._resize_to_content()
 
@@ -498,6 +503,24 @@ class _PlayerListOverlay(OverlayWindow):
     def apply_row_height(self, v: int) -> None:
         self._apply_to_rows("set_row_height", v)
         self._resize_to_content()
+
+    def apply_character_name(self, name: str) -> None:
+        my_name = (name or "").strip() or None
+        for row in getattr(self, "_rows", []):
+            row.set_is_me(player_name_matches(my_name, row._name_lbl.text()))
+
+        watcher = getattr(self, "_watcher", None)
+        fight = getattr(watcher, "current_fight", None) if watcher is not None else None
+        if fight is None and watcher is not None and watcher.session.fights:
+            fight = watcher.session.fights[-1]
+        if fight is None:
+            fight = getattr(self, "_last_fight", None)
+
+        if fight is not None:
+            self._on_fight_updated(fight)
+        else:
+            self._footer.update_stats(None, 1.0)
+            self._resize_to_content()
 
 
 

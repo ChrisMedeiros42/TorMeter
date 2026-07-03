@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from app.combat_session import Fight
 from app.constants import fmt_num
+from app.overlays_shared.player_match import player_name_matches, player_stats_matches
 from app.overlays_shared.widgets import _LocalPlayerFooter
 
 from ..helpers import _RotatedLabel
@@ -96,7 +97,7 @@ class SummaryWindow(_PlayerListOverlay):
                 heal_value=hv,
                 heal_total=ht,
                 score=sc,
-                is_me=(nm == my_name),
+                is_me=player_name_matches(my_name, nm),
                 name_size=name_size,
                 name_color=name_color,
                 score_show=score_show,
@@ -163,6 +164,7 @@ class SummaryWindow(_PlayerListOverlay):
         # State for live updates
         self._player_last_seen_wall: dict[str, float] = {}
         self._show_companions: bool = _pv("sum_show_companions", False)
+        self._last_fight: Fight | None = None
         self._timeout_timer = QTimer(self)
         self._timeout_timer.setInterval(2000)
         self._timeout_timer.timeout.connect(self._prune_timed_out_players)
@@ -177,6 +179,7 @@ class SummaryWindow(_PlayerListOverlay):
         self._watcher = watcher
 
     def _on_fight_updated(self, fight: "Fight") -> None:
+        self._last_fight = fight
         p = self._prefs
         my_name = (p.character_name if p and p.character_name else "") if p else None
         duration_s = fight.duration_s
@@ -225,7 +228,9 @@ class SummaryWindow(_PlayerListOverlay):
             )
             if row is None:
                 row = self._add_summary_row(
-                    stats.name, account_id=aid, is_me=(stats.name == my_name)
+                    stats.name,
+                    account_id=aid,
+                    is_me=player_name_matches(my_name, stats.name),
                 )
             row.setVisible(True)
             row._score_lbl.setText(fmt_num(score))
@@ -276,7 +281,8 @@ class SummaryWindow(_PlayerListOverlay):
 
         if my_name:
             my_stats = next(
-                (s for s in fight.player_stats.values() if s.name == my_name), None
+                (s for s in fight.player_stats.values() if player_stats_matches(my_name, s)),
+                None,
             )
             self._footer.update_stats(my_stats, duration_s)
 
@@ -289,7 +295,7 @@ class SummaryWindow(_PlayerListOverlay):
         p = self._prefs
         my_name = (p.character_name if p and p.character_name else "") if p else None
         for row in list(self._rows):
-            if row._name_lbl.text() == my_name:
+            if player_name_matches(my_name, row._name_lbl.text()):
                 row._bar.update_data(0.0, 1.0, 0.0, 1.0, 0.0, 1.0)
                 row._score_lbl.setText("")
                 continue
@@ -297,6 +303,7 @@ class SummaryWindow(_PlayerListOverlay):
             row.deleteLater()
             self._rows.remove(row)
         self._player_last_seen_wall.clear()
+        self._last_fight = None
         self._resize_to_content()
 
     def _add_summary_row(
@@ -377,6 +384,24 @@ class SummaryWindow(_PlayerListOverlay):
                 self._rows.remove(row)
                 self._player_last_seen_wall.pop(aid, None)
         if to_remove_ids:
+            self._resize_to_content()
+
+    def apply_character_name(self, name: str) -> None:
+        my_name = (name or "").strip() or None
+        for row in getattr(self, "_rows", []):
+            row.set_is_me(player_name_matches(my_name, row._name_lbl.text()))
+
+        watcher = getattr(self, "_watcher", None)
+        fight = getattr(watcher, "current_fight", None) if watcher is not None else None
+        if fight is None and watcher is not None and watcher.session.fights:
+            fight = watcher.session.fights[-1]
+        if fight is None:
+            fight = getattr(self, "_last_fight", None)
+
+        if fight is not None:
+            self._on_fight_updated(fight)
+        else:
+            self._footer.update_stats(None, 1.0)
             self._resize_to_content()
 
     # ── bulk apply methods ────────────────────────────────────────────────────

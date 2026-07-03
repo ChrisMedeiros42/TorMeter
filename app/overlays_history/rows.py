@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolic
 
 from app.combat_session import CombatSession, Fight, PlayerFightStats
 from app.constants import fmt_num
+from app.overlays_shared.player_match import player_stats_matches
 
 from .constants import _FIGHT_BG, _HEADER_STYLE, _LABEL_STYLE, _MAX_LIST_H
 
@@ -148,19 +149,20 @@ class _FightRow(QWidget):
     def _summary_vals(self):
         """Return [(text, color), ...] for the fight summary columns."""
         dur = self._fight.duration_s
-        # Best player by damage, or aggregate
+        # Use the selected local player when provided.
         if self._my_name:
             stats = next(
                 (
                     s
                     for s in self._fight.player_stats.values()
-                    if s.name == self._my_name
+                    if player_stats_matches(self._my_name, s)
                 ),
                 None,
             )
         else:
             stats = None
-        if stats is None and self._fight.player_stats:
+        # Only fall back when no local player is selected (historical browsing).
+        if stats is None and not self._my_name and self._fight.player_stats:
             stats = next(iter(self._fight.player_stats.values()))
         if stats:
             return [
@@ -191,6 +193,12 @@ class _FightRow(QWidget):
             cell.setText(text)
         if self._expanded:
             self._rebuild_detail()
+
+    def set_my_name(self, my_name: str | None) -> None:
+        self._my_name = my_name
+        for cell, (text, _color) in zip(self._summary_stat_cells, self._summary_vals()):
+            cell.setText(text)
+        self._rebuild_detail()
 
     def _rebuild_detail(self) -> None:
         detail_l = self._detail.layout()
@@ -283,7 +291,7 @@ class _SessionRow(QWidget):
                         aid
                         for f in session.fights
                         for aid, s in f.player_stats.items()
-                        if s.name == my_name
+                        if player_stats_matches(my_name, s)
                     ),
                     "",
                 )
@@ -291,8 +299,8 @@ class _SessionRow(QWidget):
         else:
             agg = None
 
-        # Fall back to top-damage player when the named player isn't in this session
-        if agg is None and session.fights:
+        # Only fall back when no local player is selected (historical browsing).
+        if agg is None and not my_name and session.fights:
             all_aids = {aid for f in session.fights for aid in f.player_stats}
             best_aid = max(
                 all_aids,

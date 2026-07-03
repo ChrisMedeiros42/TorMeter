@@ -1,9 +1,9 @@
 # ◢▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◣
-# ▧ - Lunar Edge Games                                        ▧
-# ▧ - Tor Meter                                               ▧
+# ▧ - Lunar Edge Games                                          ▧
+# ▧ - Tor Meter                                                 ▧
 # ▧▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▧
-# ▧ - Module: Main                                            ▧
-# ▧ - Component: Preferences                                  ▧
+# ▧ - Module: Main                                              ▧
+# ▧ - Component: Preferences                                    ▧
 # ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
 
 import sys

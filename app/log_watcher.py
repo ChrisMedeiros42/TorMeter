@@ -15,6 +15,7 @@ Signals
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -83,6 +84,7 @@ class LogWatcher(QObject):
         # This lets us advance live fight duration even during short line gaps.
         self._last_event_ts_ms: int | None = None
         self._last_event_wall: float | None = None
+        self._last_autodetect_scan_wall: float = 0.0
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
@@ -90,10 +92,97 @@ class LogWatcher(QObject):
         if log_dir:
             self.set_log_dir(log_dir)
         else:
-            for d in _DEFAULT_LOG_DIRS:
-                if d.is_dir():
-                    self.set_log_dir(d)
-                    break
+            self._try_auto_detect_log_dir()
+
+    def _candidate_log_dirs(self) -> list[Path]:
+        """Return likely SWTOR combat-log directories on Windows."""
+        candidates: list[Path] = list(_DEFAULT_LOG_DIRS)
+
+        home = Path.home()
+        userprofile = Path(os.environ.get("USERPROFILE", str(home)))
+
+        doc_roots = {
+            home / "Documents",
+            userprofile / "Documents",
+        }
+
+        for key in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+            v = os.environ.get(key)
+            if v:
+                doc_roots.add(Path(v) / "Documents")
+
+        for od in home.glob("OneDrive*"):
+            doc_roots.add(od / "Documents")
+
+        # Common SWTOR location under user document libraries.
+        for d in doc_roots:
+            candidates.append(d / "Star Wars - The Old Republic" / "CombatLogs")
+
+        # Some installs/write locations use AppData paths.
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        app_data = os.environ.get("APPDATA")
+        if local_app_data:
+            candidates.append(
+                Path(local_app_data) / "SWTOR" / "swtor" / "settings" / "CombatLogs"
+            )
+        if app_data:
+            candidates.append(
+                Path(app_data) / "SWTOR" / "swtor" / "settings" / "CombatLogs"
+            )
+
+        # Fallback scan for non-standard nesting (e.g., localized/renamed roots).
+        # Throttle this expensive scan to once every ~15 seconds.
+        now = time.monotonic()
+        if now - self._last_autodetect_scan_wall >= 15:
+            self._last_autodetect_scan_wall = now
+            for d in doc_roots:
+                if not d.is_dir():
+                    continue
+                try:
+                    for found in d.rglob("CombatLogs"):
+                        if found.is_dir():
+                            candidates.append(found)
+                    for found in d.rglob("combatlogs"):
+                        if found.is_dir():
+                            candidates.append(found)
+                except OSError:
+                    continue
+
+        # Deduplicate while preserving order.
+        unique: list[Path] = []
+        seen: set[str] = set()
+        for c in candidates:
+            key = str(c).lower()
+            if key not in seen:
+                seen.add(key)
+                unique.append(c)
+        return unique
+
+    def _try_auto_detect_log_dir(self) -> bool:
+        """Try to bind to a known SWTOR combat-log directory.
+
+        Returns True when a valid directory was found.
+        """
+        existing = [d for d in self._candidate_log_dirs() if d.is_dir()]
+        if not existing:
+            return False
+
+        def _latest_log_mtime(dir_path: Path) -> float:
+            latest = 0.0
+            try:
+                for f in dir_path.glob("*.txt"):
+                    try:
+                        latest = max(latest, f.stat().st_mtime)
+                    except OSError:
+                        continue
+            except OSError:
+                return 0.0
+            return latest
+
+        best = max(existing, key=_latest_log_mtime)
+        if self._log_dir != best:
+            self.set_log_dir(best)
+        return True
 
     # ── public API ────────────────────────────────────────────────────────────
 
@@ -105,8 +194,11 @@ class LogWatcher(QObject):
 
     def start(self) -> None:
         """Start polling (called automatically by set_log_dir; also usable standalone)."""
+        if self._log_dir is None:
+            self._try_auto_detect_log_dir()
         if not self._timer.isActive():
-            self._timer.start(_POLL_IDLE_MS)
+            interval = _POLL_ACTIVE_MS if self._file else _POLL_IDLE_MS
+            self._timer.start(interval)
 
     def stop(self) -> None:
         self._timer.stop()
@@ -197,6 +289,19 @@ class LogWatcher(QObject):
         self._debug_worker.start()
 
     def _poll(self) -> None:
+        # If no directory is configured yet, keep trying auto-detection.
+        if self._log_dir is None:
+            if not self._try_auto_detect_log_dir():
+                return
+
+        # Recover when the configured directory disappears.
+        if self._log_dir is not None and not self._log_dir.is_dir():
+            self._log_dir = None
+            self._file = None
+            self._pos = 0
+            if not self._try_auto_detect_log_dir():
+                return
+
         # Check whether a newer file has appeared
         changed = self._pick_newest_file()
         if changed:

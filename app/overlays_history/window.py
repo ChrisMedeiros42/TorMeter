@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from app.combat_session import CombatSession, Fight
 from app.log_watcher import LogWatcher
+from app.overlays_shared.player_match import player_stats_matches
 from app.overlays_shared.widgets import _ComboArrowNav, _LocalPlayerFooter, _PlayerFilterButton, _Separator
 from app.session_loader import SessionLoader
 from app.window import OverlayWindow
@@ -193,6 +194,31 @@ class CombatHistoryOverlay(OverlayWindow):
                 re.sub(r"font-size:\s*\d+px", f"font-size: {v}px", lbl.styleSheet())
             )
 
+    def apply_character_name(self, name: str) -> None:
+        self._my_name = (name or "").strip() or None
+
+        for row in self._fight_rows:
+            row.set_my_name(self._my_name)
+        if self._live_fight_row is not None:
+            self._live_fight_row.set_my_name(self._my_name)
+
+        self._rebuild_session_row()
+
+        if self._selected_fight is not None and self._my_name is not None:
+            stats = next(
+                (
+                    s
+                    for s in self._selected_fight.player_stats.values()
+                    if player_stats_matches(self._my_name, s)
+                ),
+                None,
+            )
+            self._footer.update_stats(stats, self._selected_fight.duration_s)
+        else:
+            self._footer.update_stats(None, 1.0)
+
+        self._resize_to_content()
+
     # ── watcher API ──────────────────────────────────────────────────────────
 
     def receive_watcher(self, watcher: LogWatcher) -> None:
@@ -266,7 +292,7 @@ class CombatHistoryOverlay(OverlayWindow):
             )
             if my_name:
                 stats = next(
-                    (s for s in fight.player_stats.values() if s.name == my_name),
+                    (s for s in fight.player_stats.values() if player_stats_matches(my_name, s)),
                     None,
                 )
                 self._footer.update_stats(stats, fight.duration_s)
@@ -295,7 +321,8 @@ class CombatHistoryOverlay(OverlayWindow):
             self._footer.update_stats(None, 1.0)
         else:
             stats = next(
-                (s for s in fight.player_stats.values() if s.name == my_name), None
+                (s for s in fight.player_stats.values() if player_stats_matches(my_name, s)),
+                None,
             )
             self._footer.update_stats(stats, fight.duration_s)
 
