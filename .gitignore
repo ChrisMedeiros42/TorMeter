@@ -11,7 +11,7 @@ __pycache__/
 
 # TorMeter
 combat_*
-# UserPreferences.json
+UserPreferences.json
 
 # Distribution / packaging
 .Python

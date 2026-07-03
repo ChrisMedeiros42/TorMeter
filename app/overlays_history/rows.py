@@ -1,0 +1,372 @@
+"""Row widgets and scroll container for combat history overlay."""
+
+from __future__ import annotations
+
+from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtGui import QColor, QPainter
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
+
+from app.combat_session import CombatSession, Fight, PlayerFightStats
+from app.constants import fmt_num
+
+from .constants import _FIGHT_BG, _HEADER_STYLE, _LABEL_STYLE, _MAX_LIST_H
+
+class _StatCell(QLabel):
+    def __init__(self, text: str = "—", color: str = "white"):
+        super().__init__(text)
+        self._color = color
+        self._font_size = 8
+        self._apply_style()
+        self.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.setFixedWidth(40)
+
+    def _apply_style(self):
+        self.setStyleSheet(
+            f"color: {self._color}; font-size: {self._font_size}px; background: transparent;"
+        )
+
+    def set_font_size(self, pt: int) -> None:
+        self._font_size = pt
+        self._apply_style()
+
+
+class _PlayerDetailRow(QWidget):
+    """One indented row showing a single player's stats within an expanded fight."""
+
+    def __init__(self, stats: PlayerFightStats, duration_s: float, is_me: bool = False):
+        super().__init__()
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(18)
+        self._is_me = is_me
+        self._player_name = stats.name
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(14, 0, 4, 0)  # match fight row indent
+        layout.setSpacing(4)
+
+        # Indent spacer to push name past the arrow
+        indent = QLabel()
+        indent.setFixedWidth(14)
+        layout.addWidget(indent)
+
+        self._name_lbl = QLabel(stats.name)
+        self._name_lbl.setStyleSheet(_LABEL_STYLE)
+        self._name_lbl.setFixedWidth(72)
+        layout.addWidget(self._name_lbl)
+
+        layout.addStretch(1)
+
+        self._stat_cells: list[_StatCell] = []
+        for val, color in (
+            (fmt_num(stats.dps(duration_s)), "#FF8C00"),
+            (fmt_num(stats.dtps(duration_s)), "#4169E1"),
+            (fmt_num(stats.hps(duration_s)), "#32CD32"),
+            (f"{stats.crit_rate:.0%}", "#FFD700"),
+        ):
+            cell = _StatCell(val, color)
+            self._stat_cells.append(cell)
+            layout.addWidget(cell)
+
+    def set_name_size(self, pt: int) -> None:
+        self._name_lbl.setStyleSheet(
+            f"color: rgba(255,255,255,200); font-size: {pt}px; background: transparent;"
+        )
+
+    def set_stat_size(self, pt: int) -> None:
+        for cell in self._stat_cells:
+            cell.set_font_size(pt)
+
+    def paintEvent(self, event):
+        if self._is_me:
+            p = QPainter(self)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            p.setBrush(QColor(30, 144, 255, 30))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(self.rect().adjusted(1, 0, -1, 0), 2, 2)
+        super().paintEvent(event)
+
+
+class _FightRow(QWidget):
+    """Clickable row for one completed fight; expands to show per-player detail."""
+
+    def __init__(
+        self,
+        fight: Fight,
+        my_name: str | None,
+        on_select=None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self._fight = fight
+        self._my_name = my_name
+        self._on_select = on_select
+        self._expanded = False
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self._outer = QVBoxLayout(self)
+        self._outer.setContentsMargins(0, 1, 0, 1)
+        self._outer.setSpacing(0)
+
+        # Header row
+        hdr = QWidget()
+        hdr.setStyleSheet("background: transparent;")
+        hdr_l = QHBoxLayout(hdr)
+        hdr_l.setContentsMargins(14, 2, 4, 2)
+        hdr_l.setSpacing(4)
+
+        self._arrow = QLabel("▶")
+        self._arrow.setStyleSheet(
+            "color: rgba(255,255,255,120); font-size: 7px; background: transparent;"
+        )
+        self._arrow.setFixedWidth(10)
+        hdr_l.addWidget(self._arrow)
+
+        self._name_lbl = QLabel(f"Fight {fight.index}  {fight.duration_s:.0f}s")
+        self._name_lbl.setStyleSheet(_HEADER_STYLE)
+        hdr_l.addWidget(self._name_lbl, 1)
+
+        self._summary_stat_cells: list[_StatCell] = []
+        for val, color in self._summary_vals():
+            cell = _StatCell(val, color)
+            self._summary_stat_cells.append(cell)
+            hdr_l.addWidget(cell)
+
+        self._outer.addWidget(hdr)
+
+        # Detail panel (hidden initially)
+        self._detail = QWidget()
+        self._detail.setStyleSheet("background: transparent;")
+        detail_l = QVBoxLayout(self._detail)
+        detail_l.setContentsMargins(0, 0, 0, 0)
+        detail_l.setSpacing(0)
+        self._detail_rows: list[_PlayerDetailRow] = []
+        self._populate_detail(detail_l)
+        self._detail.setVisible(False)
+        self._outer.addWidget(self._detail)
+
+    def _summary_vals(self):
+        """Return [(text, color), ...] for the fight summary columns."""
+        dur = self._fight.duration_s
+        # Best player by damage, or aggregate
+        if self._my_name:
+            stats = next(
+                (
+                    s
+                    for s in self._fight.player_stats.values()
+                    if s.name == self._my_name
+                ),
+                None,
+            )
+        else:
+            stats = None
+        if stats is None and self._fight.player_stats:
+            stats = next(iter(self._fight.player_stats.values()))
+        if stats:
+            return [
+                (fmt_num(stats.dps(dur)), "#FF8C00"),
+                (fmt_num(stats.dtps(dur)), "#4169E1"),
+                (fmt_num(stats.hps(dur)), "#32CD32"),
+                (f"{stats.crit_rate:.0%}", "#FFD700"),
+            ]
+        return [("—", "white")] * 4
+
+    def _populate_detail(self, layout: QVBoxLayout) -> None:
+        dur = self._fight.duration_s
+        for stats in sorted(
+            self._fight.player_stats.values(),
+            key=lambda s: s.damage_out,
+            reverse=True,
+        ):
+            is_me = stats.name == self._my_name
+            row = _PlayerDetailRow(stats, dur, is_me=is_me)
+            self._detail_rows.append(row)
+            layout.addWidget(row)
+
+    def update_live(self, fight: Fight) -> None:
+        """Refresh summary stats from an in-progress fight (called on fight_updated)."""
+        self._fight = fight
+        self._name_lbl.setText(f"Fight {fight.index}  {fight.duration_s:.0f}s  ◉")
+        for cell, (text, _color) in zip(self._summary_stat_cells, self._summary_vals()):
+            cell.setText(text)
+        if self._expanded:
+            self._rebuild_detail()
+
+    def _rebuild_detail(self) -> None:
+        detail_l = self._detail.layout()
+        for row in self._detail_rows:
+            row.setParent(None)
+        self._detail_rows.clear()
+        while detail_l.count():
+            item = detail_l.takeAt(0)
+            if item and item.widget():
+                item.widget().setParent(None)
+        self._populate_detail(detail_l)
+
+    def set_name_size(self, pt: int) -> None:
+        self._name_lbl.setStyleSheet(
+            f"color: white; font-size: {pt}px; font-weight: bold; background: transparent;"
+        )
+        for row in self._detail_rows:
+            row.set_name_size(pt)
+
+    def set_stat_size(self, pt: int) -> None:
+        for cell in self._summary_stat_cells:
+            cell.set_font_size(pt)
+        for row in self._detail_rows:
+            row.set_stat_size(pt)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._expanded = not self._expanded
+            self._detail.setVisible(self._expanded)
+            self._arrow.setText("▼" if self._expanded else "▶")
+            if self._on_select:
+                self._on_select(self._fight if self._expanded else None)
+        super().mousePressEvent(event)
+
+    def update_filter(self, hidden: set[str]) -> None:
+        """Show/hide per-player detail rows based on the active filter."""
+        layout = self._detail.layout()
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            if item is None:
+                continue
+            w = item.widget()
+            if isinstance(w, _PlayerDetailRow):
+                w.setVisible(getattr(w, "_player_name", None) not in hidden)
+        self.updateGeometry()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(_FIGHT_BG)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(self.rect().adjusted(2, 1, -2, -1), 3, 3)
+        super().paintEvent(event)
+
+
+class _SessionRow(QWidget):
+    """Top row showing aggregate stats across all fights."""
+
+    def __init__(self, session: CombatSession, my_name: str | None):
+        super().__init__()
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(22)
+        self._name_lbl: QLabel | None = None
+        self._stat_cells: list[_StatCell] = []
+        self._build(session, my_name)
+
+    def _build(self, session: CombatSession, my_name: str | None) -> None:
+        # Clear existing children
+        old = self.layout()
+        if old:
+            while old.count():
+                item = old.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+        self._stat_cells = []
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setSpacing(4)
+
+        self._name_lbl = QLabel(f"Session  ({session.fight_count} fights)")
+        self._name_lbl.setStyleSheet(_HEADER_STYLE)
+        layout.addWidget(self._name_lbl, 1)
+
+        total_dur = sum(f.duration_s for f in session.fights)
+        if my_name:
+            agg = session.aggregate_player_stats(
+                next(
+                    (
+                        aid
+                        for f in session.fights
+                        for aid, s in f.player_stats.items()
+                        if s.name == my_name
+                    ),
+                    "",
+                )
+            )
+        else:
+            agg = None
+
+        # Fall back to top-damage player when the named player isn't in this session
+        if agg is None and session.fights:
+            all_aids = {aid for f in session.fights for aid in f.player_stats}
+            best_aid = max(
+                all_aids,
+                key=lambda aid: sum(
+                    f.player_stats[aid].damage_out
+                    for f in session.fights
+                    if aid in f.player_stats
+                ),
+                default=None,
+            )
+            if best_aid:
+                agg = session.aggregate_player_stats(best_aid)
+
+        if agg and total_dur > 0:
+            for val, color in (
+                (fmt_num(agg.dps(total_dur)), "#FF8C00"),
+                (fmt_num(agg.dtps(total_dur)), "#4169E1"),
+                (fmt_num(agg.hps(total_dur)), "#32CD32"),
+                (f"{agg.crit_rate:.0%}", "#FFD700"),
+            ):
+                cell = _StatCell(val, color)
+                self._stat_cells.append(cell)
+                layout.addWidget(cell)
+        else:
+            for _ in range(4):
+                cell = _StatCell()
+                self._stat_cells.append(cell)
+                layout.addWidget(cell)
+
+    def set_name_size(self, pt: int) -> None:
+        if self._name_lbl:
+            self._name_lbl.setStyleSheet(
+                f"color: white; font-size: {pt}px; font-weight: bold; background: transparent;"
+            )
+
+    def set_stat_size(self, pt: int) -> None:
+        for cell in self._stat_cells:
+            cell.set_font_size(pt)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(QColor(30, 144, 255, 25))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawRoundedRect(self.rect().adjusted(1, 0, -1, 0), 3, 3)
+        super().paintEvent(event)
+
+
+class _AutoScrollArea(QScrollArea):
+    MAX_H = _MAX_LIST_H
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setWidgetResizable(True)
+        self.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollBar:vertical { background: rgba(255,255,255,15); width: 6px;"
+            " border-radius: 3px; margin: 0; }"
+            "QScrollBar::handle:vertical { background: rgba(255,255,255,70);"
+            " border-radius: 3px; min-height: 20px; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        )
+
+    def sizeHint(self) -> QSize:
+        w = self.widget()
+        if w is None:
+            return super().sizeHint()
+        inner = w.sizeHint()
+        sb_w = self.verticalScrollBar().sizeHint().width()
+        h = min(inner.height(), self.MAX_H)
+        return QSize(inner.width() + sb_w, h)
+
+
+
