@@ -10,8 +10,8 @@ __pycache__/
 *.code-workspace
 
 # TorMeter
-combat_*
-UserPreferences.json
+data/combatlogs
+# UserPreferences.json
 
 # Distribution / packaging
 .Python
