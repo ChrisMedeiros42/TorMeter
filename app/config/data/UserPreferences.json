@@ -46,7 +46,7 @@
     "heal_win_bg_alpha": 36,
     "heal_win_bg_color": "#000000",
     "sum_avg_show": true,
-    "sum_total_show": true,
+    "sum_total_show": false,
     "sum_bar_border_show": true,
     "sum_bar_border_size": 1,
     "sum_bar_border_color": "#FFFFFF",
@@ -139,9 +139,9 @@
     "coh_stat_size": 10,
     "coh_list_height": 420,
     "coh_label_size": 10,
-    "cht_win_width": 421,
-    "cht_win_height": 557,
-    "cht_win_bg_alpha": 80,
+    "cht_win_width": 420,
+    "cht_win_height": 856,
+    "cht_win_bg_alpha": 100,
     "cht_win_bg_color": "#000000",
     "cht_name_size": 10,
     "cht_name_color": "#FFFFFF",
@@ -179,8 +179,8 @@
       "visible": true
     },
     "Summary": {
-      "x": -39,
-      "y": 1076,
+      "x": -28,
+      "y": 1080,
       "default_x": 100,
       "default_y": 100,
       "expand": "down",
@@ -230,7 +230,7 @@
       "default_y": 100,
       "expand": "down",
       "anchor": "top-left",
-      "visible": true
+      "visible": false
     }
   }
 }

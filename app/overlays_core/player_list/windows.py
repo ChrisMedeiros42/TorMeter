@@ -232,6 +232,9 @@ class SummaryWindow(_PlayerListOverlay):
                     account_id=aid,
                     is_me=player_name_matches(my_name, stats.name),
                 )
+            # Ensure _account_id is set so the "recent-but-inactive" reset loop
+            # below can correctly identify this row as active via active_ids.
+            row._account_id = aid
             row.setVisible(True)
             row._score_lbl.setText(fmt_num(score))
             scored.append((score, aid, stats, row))
