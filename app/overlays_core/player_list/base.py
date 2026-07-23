@@ -132,6 +132,7 @@ class _PlayerListOverlay(OverlayWindow):
             show_hps=(self.prefs_prefix == "heal"),
             show_dtps=True,
             show_crit=True,
+            value_size=_pv(f"{g}_footer_value_size", 9),
         )
         self._layout.addWidget(self._footer)
 
@@ -153,7 +154,7 @@ class _PlayerListOverlay(OverlayWindow):
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             c = QColor(getattr(self, "_win_bg_color", "#000000"))
-            c.setAlpha(round(alpha * 255 / 100))
+            c.setAlpha(max(0, min(255, alpha)))
             painter.setBrush(c)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 4, 4)
@@ -166,6 +167,11 @@ class _PlayerListOverlay(OverlayWindow):
     def apply_win_bg_color(self, c: str) -> None:
         self._win_bg_color = c
         self.update()
+
+    def apply_footer_value_size(self, v: int) -> None:
+        self._footer.set_value_size(v)
+        if self._prefs:
+            setattr(self._prefs, f"{self.prefs_prefix}_footer_value_size", v)
 
     def receive_watcher(self, watcher) -> None:
         """Connect to a LogWatcher instance to receive live updates."""

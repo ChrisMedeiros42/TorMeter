@@ -157,7 +157,11 @@ class SummaryWindow(_PlayerListOverlay):
 
         # ── footer: local-player effective stats ──────────────────────────────
         self._footer = _LocalPlayerFooter(
-            show_dps=True, show_hps=True, show_dtps=True, show_crit=True
+            show_dps=True,
+            show_hps=True,
+            show_dtps=True,
+            show_crit=True,
+            value_size=_pv("sum_footer_value_size", 9),
         )
         self._layout.addWidget(self._footer)
 
@@ -169,6 +173,11 @@ class SummaryWindow(_PlayerListOverlay):
         self._timeout_timer.setInterval(2000)
         self._timeout_timer.timeout.connect(self._prune_timed_out_players)
         self._timeout_timer.start()
+
+    def apply_footer_value_size(self, v: int) -> None:
+        self._footer.set_value_size(v)
+        if self._prefs:
+            self._prefs.sum_footer_value_size = v
 
     # ── live data API (mirrors _PlayerListOverlay) ────────────────────────────
 
@@ -205,16 +214,8 @@ class SummaryWindow(_PlayerListOverlay):
                 self._player_last_seen_wall[aid] = time.monotonic()
             if not _is_recent(aid):
                 continue
-            avg_show = getattr(self, "_avg_show", True)
-            total_show = getattr(self, "_total_show", True)
-            if avg_show and total_show:
-                score = (stats.dps(duration_s) + stats.damage_out +
-                         stats.dtps(duration_s) + stats.damage_in +
-                         stats.hps(duration_s) + stats.heal_out)
-            elif avg_show:
-                score = stats.dps(duration_s) + stats.dtps(duration_s) + stats.hps(duration_s)
-            else:
-                score = stats.damage_out + stats.damage_in + stats.heal_out
+            # Summary ordering uses total contribution only.
+            score = stats.damage_out + stats.damage_in + stats.heal_out
             if score <= 0:
                 continue
             row = next(

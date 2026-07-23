@@ -26,25 +26,34 @@ class _Separator(QWidget):
 
 # ── local-player stat footer ──────────────────────────────────────────────────
 _PILL_STYLE = (
-    "color: {color}; font-size: 9px; background: rgba(255,255,255,15);"
+    "color: {color}; font-size: {size}px; background: rgba(255,255,255,15);"
     " border-radius: 3px; padding: 1px 4px;"
 )
-_FOOTER_LABEL_STYLE = (
-    "color: rgba(255,255,255,120); font-size: 8px; background: transparent;"
-)
+
+
+def _footer_label_style(size: int) -> str:
+    return (
+        "color: rgba(255,255,255,120); "
+        f"font-size: {size}px; background: transparent;"
+    )
 
 
 class _StatPill(QLabel):
     """Small colored label showing one stat value."""
 
-    def __init__(self, color: str, parent: QWidget | None = None):
+    def __init__(self, color: str, size: int = 9, parent: QWidget | None = None):
         super().__init__("—", parent)
         self._color = color
-        self.setStyleSheet(_PILL_STYLE.format(color=color))
+        self._size = size
+        self.setStyleSheet(_PILL_STYLE.format(color=color, size=size))
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def set_value(self, text: str) -> None:
         self.setText(text)
+
+    def set_value_size(self, size: int) -> None:
+        self._size = size
+        self.setStyleSheet(_PILL_STYLE.format(color=self._color, size=size))
 
 
 class _ComboArrowNav(QWidget):
@@ -205,6 +214,7 @@ class _LocalPlayerFooter(QWidget):
         show_hps: bool = False,
         show_dtps: bool = True,
         show_crit: bool = True,
+        value_size: int = 9,
         filter_widget: QWidget | None = None,
         parent: QWidget | None = None,
     ):
@@ -224,37 +234,42 @@ class _LocalPlayerFooter(QWidget):
         row_l.setSpacing(4)
 
         me_lbl = QLabel("me:")
-        me_lbl.setStyleSheet(_FOOTER_LABEL_STYLE)
+        me_lbl.setStyleSheet(_footer_label_style(value_size))
+        self._labels: list[QLabel] = [me_lbl]
         row_l.addWidget(me_lbl)
 
         self._pills: dict[str, _StatPill] = {}
 
         if show_dps:
             lbl = QLabel("DPS")
-            lbl.setStyleSheet(_FOOTER_LABEL_STYLE)
+            lbl.setStyleSheet(_footer_label_style(value_size))
+            self._labels.append(lbl)
             row_l.addWidget(lbl)
-            self._pills["dps"] = _StatPill("#FF8C00")
+            self._pills["dps"] = _StatPill("#FF8C00", value_size)
             row_l.addWidget(self._pills["dps"])
 
         if show_dtps:
             lbl = QLabel("DTPS")
-            lbl.setStyleSheet(_FOOTER_LABEL_STYLE)
+            lbl.setStyleSheet(_footer_label_style(value_size))
+            self._labels.append(lbl)
             row_l.addWidget(lbl)
-            self._pills["dtps"] = _StatPill("#4169E1")
+            self._pills["dtps"] = _StatPill("#4169E1", value_size)
             row_l.addWidget(self._pills["dtps"])
 
         if show_hps:
             lbl = QLabel("HPS")
-            lbl.setStyleSheet(_FOOTER_LABEL_STYLE)
+            lbl.setStyleSheet(_footer_label_style(value_size))
+            self._labels.append(lbl)
             row_l.addWidget(lbl)
-            self._pills["hps"] = _StatPill("#32CD32")
+            self._pills["hps"] = _StatPill("#32CD32", value_size)
             row_l.addWidget(self._pills["hps"])
 
         if show_crit:
             lbl = QLabel("Crit")
-            lbl.setStyleSheet(_FOOTER_LABEL_STYLE)
+            lbl.setStyleSheet(_footer_label_style(value_size))
+            self._labels.append(lbl)
             row_l.addWidget(lbl)
-            self._pills["crit"] = _StatPill("#FFD700")
+            self._pills["crit"] = _StatPill("#FFD700", value_size)
             row_l.addWidget(self._pills["crit"])
 
         row_l.addStretch(1)
@@ -276,6 +291,12 @@ class _LocalPlayerFooter(QWidget):
             self._pills["hps"].set_value(fmt_num(stats.hps(duration_s)))
         if "crit" in self._pills:
             self._pills["crit"].set_value(f"{stats.crit_rate:.0%}")
+
+    def set_value_size(self, size: int) -> None:
+        for lbl in self._labels:
+            lbl.setStyleSheet(_footer_label_style(size))
+        for pill in self._pills.values():
+            pill.set_value_size(size)
 
 
 # ── shared player-list base ───────────────────────────────────────────────────

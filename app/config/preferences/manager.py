@@ -98,6 +98,7 @@ class Preferences:
         self.sum_score_color: str = "#FFD700"
         self.sum_show_companions: bool = False
         self.sum_row_height: int = 24
+        self.sum_footer_value_size: int = 9
         self.sum_outline_show: bool = True
         self.sum_outline_size: int = 1
         self.sum_outline_color: str = "#000000"
@@ -117,6 +118,7 @@ class Preferences:
         self.dps_score_color: str = "#FFD700"
         self.dps_show_companions: bool = False
         self.dps_row_height: int = 24
+        self.dps_footer_value_size: int = 9
         self.dps_outline_show: bool = True
         self.dps_outline_size: int = 1
         self.dps_outline_color: str = "#000000"
@@ -136,6 +138,7 @@ class Preferences:
         self.def_score_color: str = "#FFD700"
         self.def_show_companions: bool = False
         self.def_row_height: int = 24
+        self.def_footer_value_size: int = 9
         self.def_outline_show: bool = True
         self.def_outline_size: int = 1
         self.def_outline_color: str = "#000000"
@@ -155,6 +158,7 @@ class Preferences:
         self.heal_score_color: str = "#FFD700"
         self.heal_show_companions: bool = False
         self.heal_row_height: int = 24
+        self.heal_footer_value_size: int = 9
         self.heal_outline_show: bool = True
         self.heal_outline_size: int = 1
         self.heal_outline_color: str = "#000000"
@@ -162,6 +166,7 @@ class Preferences:
         # ── Overlay Master background ──────────────────────────────────────────────
         self.om_win_bg_alpha: int = 0
         self.om_win_bg_color: str = "#14141E"
+        self.om_show_watcher_debug: bool = False
         # ── Combat History overlay settings ────────────────────────────────────────
         self.coh_win_width: int = 380
         self.coh_win_height: int = 600
@@ -170,8 +175,9 @@ class Preferences:
         self.coh_name_size: int = 10
         self.coh_name_color: str = "#FFFFFF"
         self.coh_stat_size: int = 10
-        self.coh_list_height: int = 420
+        self.coh_list_height: int = 520
         self.coh_label_size: int = 10
+        self.coh_footer_value_size: int = 9
         # ── Charts overlay settings ───────────────────────────────────────────────
         self.cht_win_width: int = 300
         self.cht_win_height: int = 500
@@ -183,6 +189,7 @@ class Preferences:
         self.cht_other_color: str = "#787878"
         self.cht_val_size: int = 10
         self.cht_label_size: int = 10
+        self.cht_footer_value_size: int = 9
         self._load()
 
     def _load(self):
@@ -257,6 +264,7 @@ class Preferences:
             self.sum_score_color = om.get("sum_score_color", "#FFD700")
             self.sum_show_companions = om.get("sum_show_companions", False)
             self.sum_row_height = om.get("sum_row_height", 24)
+            self.sum_footer_value_size = om.get("sum_footer_value_size", 9)
             self.sum_outline_show = om.get("sum_outline_show", True)
             self.sum_outline_size = om.get("sum_outline_size", 1)
             self.sum_outline_color = om.get("sum_outline_color", "#000000")
@@ -276,6 +284,7 @@ class Preferences:
             self.dps_score_color = om.get("dps_score_color", "#FFD700")
             self.dps_show_companions = om.get("dps_show_companions", False)
             self.dps_row_height = om.get("dps_row_height", 24)
+            self.dps_footer_value_size = om.get("dps_footer_value_size", 9)
             self.dps_outline_show = om.get("dps_outline_show", True)
             self.dps_outline_size = om.get("dps_outline_size", 1)
             self.dps_outline_color = om.get("dps_outline_color", "#000000")
@@ -295,6 +304,7 @@ class Preferences:
             self.def_score_color = om.get("def_score_color", "#FFD700")
             self.def_show_companions = om.get("def_show_companions", False)
             self.def_row_height = om.get("def_row_height", 24)
+            self.def_footer_value_size = om.get("def_footer_value_size", 9)
             self.def_outline_show = om.get("def_outline_show", True)
             self.def_outline_size = om.get("def_outline_size", 1)
             self.def_outline_color = om.get("def_outline_color", "#000000")
@@ -314,12 +324,14 @@ class Preferences:
             self.heal_score_color = om.get("heal_score_color", "#FFD700")
             self.heal_show_companions = om.get("heal_show_companions", False)
             self.heal_row_height = om.get("heal_row_height", 24)
+            self.heal_footer_value_size = om.get("heal_footer_value_size", 9)
             self.heal_outline_show = om.get("heal_outline_show", True)
             self.heal_outline_size = om.get("heal_outline_size", 1)
             self.heal_outline_color = om.get("heal_outline_color", "#000000")
             self.display_keep_seconds = om.get("display_keep_seconds", 120)
             self.om_win_bg_alpha = om.get("om_win_bg_alpha", 0)
             self.om_win_bg_color = om.get("om_win_bg_color", "#14141E")
+            self.om_show_watcher_debug = om.get("om_show_watcher_debug", False)
             self.coh_win_width = om.get("coh_win_width", 380)
             self.coh_win_height = om.get("coh_win_height", 600)
             self.coh_win_bg_alpha = om.get("coh_win_bg_alpha", 0)
@@ -327,8 +339,10 @@ class Preferences:
             self.coh_name_size = om.get("coh_name_size", 10)
             self.coh_name_color = om.get("coh_name_color", "#FFFFFF")
             self.coh_stat_size = om.get("coh_stat_size", 10)
-            self.coh_list_height = om.get("coh_list_height", 420)
+            _coh_list_h = om.get("coh_list_height", 520)
+            self.coh_list_height = 520 if _coh_list_h < 260 else _coh_list_h
             self.coh_label_size = om.get("coh_label_size", 10)
+            self.coh_footer_value_size = om.get("coh_footer_value_size", 9)
             self.cht_win_width = om.get("cht_win_width", 300)
             self.cht_win_height = om.get("cht_win_height", 500)
             self.cht_win_bg_alpha = om.get("cht_win_bg_alpha", 0)
@@ -339,6 +353,7 @@ class Preferences:
             self.cht_other_color = om.get("cht_other_color", "#787878")
             self.cht_val_size = om.get("cht_val_size", 10)
             self.cht_label_size = om.get("cht_label_size", 10)
+            self.cht_footer_value_size = om.get("cht_footer_value_size", 9)
         else:
             windows = {}
 
@@ -447,6 +462,7 @@ class Preferences:
                 "sum_score_color": self.sum_score_color,
                 "sum_show_companions": self.sum_show_companions,
                 "sum_row_height": self.sum_row_height,
+                "sum_footer_value_size": self.sum_footer_value_size,
                 "sum_outline_show": self.sum_outline_show,
                 "sum_outline_size": self.sum_outline_size,
                 "sum_outline_color": self.sum_outline_color,
@@ -466,6 +482,7 @@ class Preferences:
                 "dps_score_color": self.dps_score_color,
                 "dps_show_companions": self.dps_show_companions,
                 "dps_row_height": self.dps_row_height,
+                "dps_footer_value_size": self.dps_footer_value_size,
                 "dps_outline_show": self.dps_outline_show,
                 "dps_outline_size": self.dps_outline_size,
                 "dps_outline_color": self.dps_outline_color,
@@ -485,6 +502,7 @@ class Preferences:
                 "def_score_color": self.def_score_color,
                 "def_show_companions": self.def_show_companions,
                 "def_row_height": self.def_row_height,
+                "def_footer_value_size": self.def_footer_value_size,
                 "def_outline_show": self.def_outline_show,
                 "def_outline_size": self.def_outline_size,
                 "def_outline_color": self.def_outline_color,
@@ -504,12 +522,14 @@ class Preferences:
                 "heal_score_color": self.heal_score_color,
                 "heal_show_companions": self.heal_show_companions,
                 "heal_row_height": self.heal_row_height,
+                "heal_footer_value_size": self.heal_footer_value_size,
                 "heal_outline_show": self.heal_outline_show,
                 "heal_outline_size": self.heal_outline_size,
                 "heal_outline_color": self.heal_outline_color,
                 "display_keep_seconds": self.display_keep_seconds,
                 "om_win_bg_alpha": self.om_win_bg_alpha,
                 "om_win_bg_color": self.om_win_bg_color,
+                "om_show_watcher_debug": self.om_show_watcher_debug,
                 "coh_win_width": self.coh_win_width,
                 "coh_win_height": self.coh_win_height,
                 "coh_win_bg_alpha": self.coh_win_bg_alpha,
@@ -519,6 +539,7 @@ class Preferences:
                 "coh_stat_size": self.coh_stat_size,
                 "coh_list_height": self.coh_list_height,
                 "coh_label_size": self.coh_label_size,
+                "coh_footer_value_size": self.coh_footer_value_size,
                 "cht_win_width": self.cht_win_width,
                 "cht_win_height": self.cht_win_height,
                 "cht_win_bg_alpha": self.cht_win_bg_alpha,
@@ -529,6 +550,7 @@ class Preferences:
                 "cht_other_color": self.cht_other_color,
                 "cht_val_size": self.cht_val_size,
                 "cht_label_size": self.cht_label_size,
+                "cht_footer_value_size": self.cht_footer_value_size,
             },
             "windows": {name: asdict(prefs) for name, prefs in self._data.items()},
         }

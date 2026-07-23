@@ -8,7 +8,7 @@
 
 import ctypes
 
-from PyQt6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QLabel, QSizeGrip, QSizePolicy, QVBoxLayout, QWidget
 from PyQt6.QtCore import Qt, QPoint, QRect, QSize, QTimer
 from PyQt6.QtGui import QFont, QKeyEvent, QMouseEvent, QPainter, QColor, QPen
 
@@ -27,6 +27,7 @@ CLOSE_BTN_SIZE = 8  # square hit area for the X button
 CLOSE_BTN_MARGIN = 4  # gap between X and the right border
 CONTENT_PADDING = 4  # padding around child content (left, right, bottom)
 INITIAL_WIDTH_EXTRA = 50  # extra starting width beyond content
+RESIZE_GRIP_SIZE = 12
 
 
 class OverlayWindow(QWidget):
@@ -43,6 +44,8 @@ class OverlayWindow(QWidget):
         self._prefs = prefs
         self._click_through = True
         self._drag_start: QPoint | None = None
+        self._programmatic_resize = False
+        self._manual_window_size: QSize | None = None
         self._vis_obs: ObservableValue | None = None
 
         self.setWindowFlags(
@@ -51,7 +54,7 @@ class OverlayWindow(QWidget):
             | Qt.WindowType.Tool  # hides from taskbar
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setWindowOpacity(0.75)  # semi-transparent
+        self.setWindowOpacity(1.0)
 
         # Content widget sits below the menu bar with padding on left, right, bottom
         # Offset by BORDER_WIDTH so content clears the 3px green border
@@ -74,13 +77,26 @@ class OverlayWindow(QWidget):
         _content_offset = BORDER_WIDTH + CONTENT_PADDING
         w = content_w + _content_offset * 2
         h = MENU_BAR_HEIGHT + content_size.height() + _content_offset
-        self.setFixedSize(w, h)
+        self.resize(w, h)
 
         # Explicitly size the content widget to fill the padded area
-        self._content.setFixedSize(content_w, content_size.height())
         self._content.setStyleSheet(
             "background: transparent;"
         )  # enables proper child clipping
+
+        self._size_grip = QSizeGrip(self)
+        self._size_grip.setFixedSize(RESIZE_GRIP_SIZE, RESIZE_GRIP_SIZE)
+        self._size_grip.setStyleSheet(
+            "QSizeGrip {"
+            " background: rgba(0,0,0,120);"
+            " border-top: 1px solid rgba(255,255,255,90);"
+            " border-left: 1px solid rgba(255,255,255,90);"
+            " border-bottom-right-radius: 3px;"
+            "}"
+        )
+        self._size_grip.setCursor(Qt.CursorShape.SizeFDiagCursor)
+        self._size_grip.raise_()
+        self._sync_layout_geometry()
 
         self.show()
         self._hwnd = int(self.winId())
@@ -185,10 +201,31 @@ class OverlayWindow(QWidget):
             if self._max_content_height > 0:
                 ch = min(ch, self._max_content_height)
             co = BORDER_WIDTH + CONTENT_PADDING
-            self._content.setFixedSize(cw, ch)
-            self.setFixedSize(cw + co * 2, MENU_BAR_HEIGHT + ch + co)
+            if self._manual_window_size is not None:
+                manual_cw = max(0, self._manual_window_size.width() - co * 2)
+                manual_ch = max(0, self._manual_window_size.height() - MENU_BAR_HEIGHT - co)
+                cw = max(cw, manual_cw)
+                ch = max(ch, manual_ch)
+            self._programmatic_resize = True
+            self.resize(cw + co * 2, MENU_BAR_HEIGHT + ch + co)
+            self._sync_layout_geometry()
+            self._programmatic_resize = False
 
         QTimer.singleShot(0, _do)
+
+    def _sync_layout_geometry(self) -> None:
+        co = BORDER_WIDTH + CONTENT_PADDING
+        content_w = max(1, self.width() - co * 2)
+        content_h = max(1, self.height() - MENU_BAR_HEIGHT - co)
+        self._content.setGeometry(co, MENU_BAR_HEIGHT, content_w, content_h)
+        if hasattr(self, "_size_grip"):
+            self._size_grip.move(self.width() - self._size_grip.width(), self.height() - self._size_grip.height())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._sync_layout_geometry()
+        if not self._programmatic_resize:
+            self._manual_window_size = self.size()
 
     def _close_btn_rect(self) -> QRect:
         x = self.width() - BORDER_WIDTH - CLOSE_BTN_MARGIN - CLOSE_BTN_SIZE
@@ -199,6 +236,24 @@ class OverlayWindow(QWidget):
 
     def paintEvent(self, event):
         super().paintEvent(event)
+        # Always render a visible corner cue so the resize affordance is obvious.
+        grip_p = QPainter(self)
+        grip_p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # Dark backing + bright hatch keeps contrast on both light and dark fills.
+        grip_p.setPen(Qt.PenStyle.NoPen)
+        grip_p.setBrush(QColor(0, 0, 0, 120))
+        grip_p.drawRoundedRect(self.width() - 16, self.height() - 16, 14, 14, 2, 2)
+
+        grip_col = QColor(210, 240, 255, 220 if not self._click_through else 180)
+        grip_pen = QPen(grip_col)
+        grip_pen.setWidth(2)
+        grip_p.setPen(grip_pen)
+        x2 = self.width() - 3
+        y2 = self.height() - 3
+        grip_p.drawLine(x2 - 10, y2, x2, y2 - 10)
+        grip_p.drawLine(x2 - 7, y2, x2, y2 - 7)
+        grip_p.drawLine(x2 - 4, y2, x2, y2 - 4)
+
         if not self._click_through:
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)

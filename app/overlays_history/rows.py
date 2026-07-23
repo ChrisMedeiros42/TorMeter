@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QColor, QPainter
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 from app.combat_session import CombatSession, Fight, PlayerFightStats
 from app.constants import fmt_num
+from app.parsing.logs.constants import PLAYER
 from app.overlays_shared.player_match import player_stats_matches
 
 from .constants import _FIGHT_BG, _HEADER_STYLE, _LABEL_STYLE, _MAX_LIST_H
@@ -31,28 +32,57 @@ class _StatCell(QLabel):
         self._apply_style()
 
 
-class _PlayerDetailRow(QWidget):
-    """One indented row showing a single player's stats within an expanded fight."""
+def _empty_stats(name: str, account_id: str) -> PlayerFightStats:
+    return PlayerFightStats(name=name, account_id=account_id)
 
-    def __init__(self, stats: PlayerFightStats, duration_s: float, is_me: bool = False):
+
+def _aggregate_ability_stats(fight: Fight, account_id: str) -> list[tuple[str, PlayerFightStats]]:
+    by_ability: dict[str, PlayerFightStats] = {}
+    for event in fight.events:
+        src = event.source
+        if (
+            src is None
+            or src.kind != PLAYER
+            or (src.account_id or src.name) != account_id
+            or event.effect_name not in {"Damage", "Heal"}
+        ):
+            continue
+
+        ability = event.ability_name.strip() or "(unknown)"
+        stats = by_ability.get(ability)
+        if stats is None:
+            stats = _empty_stats(ability, ability)
+            by_ability[ability] = stats
+
+        net = max(event.amount - event.mitigation, 0)
+        if event.effect_name == "Damage":
+            stats.damage_out += net
+            if net > 0:
+                stats.hit_count += 1
+                if event.is_crit:
+                    stats.crit_count += 1
+        else:
+            stats.heal_out += net
+
+    return list(by_ability.items())
+
+
+class _AbilityDetailRow(QWidget):
+    """Indented row showing one ability used by a player in a fight."""
+
+    def __init__(self, ability_name: str, stats: PlayerFightStats, duration_s: float):
         super().__init__()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setFixedHeight(18)
-        self._is_me = is_me
-        self._player_name = stats.name
+        self.setFixedHeight(16)
+        self._ability_name = ability_name
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(14, 0, 4, 0)  # match fight row indent
+        layout.setContentsMargins(32, 0, 4, 0)
         layout.setSpacing(4)
 
-        # Indent spacer to push name past the arrow
-        indent = QLabel()
-        indent.setFixedWidth(14)
-        layout.addWidget(indent)
-
-        self._name_lbl = QLabel(stats.name)
+        self._name_lbl = QLabel(ability_name)
         self._name_lbl.setStyleSheet(_LABEL_STYLE)
-        self._name_lbl.setFixedWidth(72)
+        self._name_lbl.setFixedWidth(104)
         layout.addWidget(self._name_lbl)
 
         layout.addStretch(1)
@@ -70,12 +100,168 @@ class _PlayerDetailRow(QWidget):
 
     def set_name_size(self, pt: int) -> None:
         self._name_lbl.setStyleSheet(
-            f"color: rgba(255,255,255,200); font-size: {pt}px; background: transparent;"
+            f"color: rgba(255,255,255,185); font-size: {pt}px; background: transparent;"
         )
 
     def set_stat_size(self, pt: int) -> None:
         for cell in self._stat_cells:
             cell.set_font_size(pt)
+
+    def mousePressEvent(self, event):
+        # Keep clicks inside ability rows from toggling the parent fight row.
+        event.accept()
+
+
+class _PlayerDetailRow(QWidget):
+    """One player summary row with an optional per-ability breakdown."""
+
+    _SORT_OPTIONS = ("Total", "Damage", "Healing", "Crit")
+
+    @staticmethod
+    def _default_sort_mode(stats: PlayerFightStats) -> str:
+        if stats.heal_out > stats.damage_out:
+            return "Healing"
+        if stats.damage_out > stats.heal_out:
+            return "Damage"
+        return "Total"
+
+    def __init__(self, fight: Fight, stats: PlayerFightStats, is_me: bool = False):
+        super().__init__()
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._is_me = is_me
+        self._player_name = stats.name
+        self._fight = fight
+        self._account_id = stats.account_id
+        self._expanded = False
+
+        self._outer = QVBoxLayout(self)
+        self._outer.setContentsMargins(14, 0, 4, 0)  # match fight row indent
+        self._outer.setSpacing(0)
+
+        hdr = QWidget()
+        hdr.setStyleSheet("background: transparent;")
+        hdr_l = QHBoxLayout(hdr)
+        hdr_l.setContentsMargins(0, 0, 0, 0)
+        hdr_l.setSpacing(4)
+
+        self._arrow = QLabel("▶")
+        self._arrow.setStyleSheet(
+            "color: rgba(255,255,255,120); font-size: 7px; background: transparent;"
+        )
+        self._arrow.setFixedWidth(10)
+        hdr_l.addWidget(self._arrow)
+
+        self._name_lbl = QLabel(stats.name)
+        self._name_lbl.setStyleSheet(_LABEL_STYLE)
+        self._name_lbl.setFixedWidth(72)
+        hdr_l.addWidget(self._name_lbl)
+
+        self._sort_combo = QComboBox()
+        self._sort_combo.addItems(self._SORT_OPTIONS)
+        self._sort_combo.setFixedWidth(56)
+        self._sort_combo.setCurrentText(self._default_sort_mode(stats))
+        self._sort_combo.setStyleSheet(
+            "QComboBox { color: white; background: rgba(255,255,255,18);"
+            " border: 1px solid rgba(255,255,255,45); border-radius: 2px;"
+            " font-size: 7px; padding: 0 2px; }"
+            "QComboBox::drop-down { width: 10px; border: none; }"
+            "QComboBox QAbstractItemView { background: rgba(20,20,30,240);"
+            " color: white; selection-background-color: rgba(30,144,255,180);"
+            " border: 1px solid rgba(255,255,255,60); font-size: 7px; }"
+        )
+        self._sort_combo.currentTextChanged.connect(self._rebuild_abilities)
+        hdr_l.addWidget(self._sort_combo)
+
+        hdr_l.addStretch(1)
+
+        self._stat_cells: list[_StatCell] = []
+        for val, color in self._summary_vals(stats, fight.duration_s):
+            cell = _StatCell(val, color)
+            self._stat_cells.append(cell)
+            hdr_l.addWidget(cell)
+
+        self._outer.addWidget(hdr)
+
+        self._detail = QWidget()
+        self._detail.setStyleSheet("background: transparent;")
+        detail_l = QVBoxLayout(self._detail)
+        detail_l.setContentsMargins(0, 0, 0, 0)
+        detail_l.setSpacing(0)
+
+        self._ability_rows: list[_AbilityDetailRow] = []
+        self._ability_data = _aggregate_ability_stats(self._fight, self._account_id)
+        self._populate_abilities(detail_l)
+        self._detail.setVisible(False)
+        self._outer.addWidget(self._detail)
+
+    def _sort_ability_items(self) -> list[tuple[str, PlayerFightStats]]:
+        mode = self._sort_combo.currentText()
+
+        def _key(item: tuple[str, PlayerFightStats]):
+            name, stats = item
+            total = stats.damage_out + stats.heal_out
+            if mode == "Damage":
+                primary = stats.damage_out
+            elif mode == "Healing":
+                primary = stats.heal_out
+            elif mode == "Crit":
+                primary = stats.crit_count
+            else:
+                primary = total
+            secondary = stats.damage_out if mode != "Healing" else stats.heal_out
+            return (-primary, -secondary, name)
+
+        return sorted(self._ability_data, key=_key)
+
+    def _rebuild_abilities(self, *_ignored) -> None:
+        detail_l = self._detail.layout()
+        while detail_l.count():
+            item = detail_l.takeAt(0)
+            if item and item.widget():
+                item.widget().setParent(None)
+        self._ability_rows.clear()
+        self._populate_abilities(detail_l)
+
+    def _summary_vals(self, stats: PlayerFightStats, duration_s: float):
+        return [
+            (fmt_num(stats.dps(duration_s)), "#FF8C00"),
+            (fmt_num(stats.dtps(duration_s)), "#4169E1"),
+            (fmt_num(stats.hps(duration_s)), "#32CD32"),
+            (f"{stats.crit_rate:.0%}", "#FFD700"),
+        ]
+
+    def _populate_abilities(self, layout: QVBoxLayout) -> None:
+        for ability_name, stats in self._sort_ability_items():
+            row = _AbilityDetailRow(ability_name, stats, self._fight.duration_s)
+            self._ability_rows.append(row)
+            layout.addWidget(row)
+
+    def set_name_size(self, pt: int) -> None:
+        self._name_lbl.setStyleSheet(
+            f"color: rgba(255,255,255,200); font-size: {pt}px; background: transparent;"
+        )
+        for row in self._ability_rows:
+            row.set_name_size(pt)
+
+    def set_stat_size(self, pt: int) -> None:
+        for cell in self._stat_cells:
+            cell.set_font_size(pt)
+        for row in self._ability_rows:
+            row.set_stat_size(pt)
+
+    def _toggle(self) -> None:
+        self._expanded = not self._expanded
+        self._detail.setVisible(self._expanded)
+        self._arrow.setText("▼" if self._expanded else "▶")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._toggle()
+            # Do not bubble to parent _FightRow; that would collapse the fight.
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
     def paintEvent(self, event):
         if self._is_me:
@@ -181,7 +367,7 @@ class _FightRow(QWidget):
             reverse=True,
         ):
             is_me = stats.name == self._my_name
-            row = _PlayerDetailRow(stats, dur, is_me=is_me)
+            row = _PlayerDetailRow(self._fight, stats, is_me=is_me)
             self._detail_rows.append(row)
             layout.addWidget(row)
 

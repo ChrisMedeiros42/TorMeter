@@ -107,6 +107,7 @@ class CombatHistoryOverlay(OverlayWindow):
         self._scroll = _AutoScrollArea()
         if p:
             self._scroll.MAX_H = p.coh_list_height
+        self._scroll.setMinimumHeight(min(self._scroll.MAX_H, 260))
         self._scroll.setWidget(self._list_widget)
         self._layout.addWidget(self._scroll)
 
@@ -118,6 +119,7 @@ class CombatHistoryOverlay(OverlayWindow):
             show_hps=True,
             show_dtps=True,
             show_crit=True,
+            value_size=(p.coh_footer_value_size if p else 9),
             filter_widget=self._filter_btn,
         )
         self._layout.addWidget(self._footer)
@@ -171,11 +173,17 @@ class CombatHistoryOverlay(OverlayWindow):
             lbl.setStyleSheet(
                 re.sub(r"font-size:\s*\d+px", f"font-size: {v}px", lbl.styleSheet())
             )
+
+    def apply_footer_value_size(self, v: int) -> None:
+        self._footer.set_value_size(v)
+        if self._prefs:
+            self._prefs.coh_footer_value_size = v
         for row in self._fight_rows:
             row.set_stat_size(v)
 
     def apply_list_height(self, v: int) -> None:
         self._scroll.MAX_H = v
+        self._scroll.setMinimumHeight(min(v, 260))
         if self._prefs:
             self._prefs.coh_list_height = v
         self._scroll.updateGeometry()
@@ -443,7 +451,7 @@ class CombatHistoryOverlay(OverlayWindow):
         alpha = getattr(p, "coh_win_bg_alpha", 0) if p else 0
         if alpha > 0:
             c = QColor(getattr(p, "coh_win_bg_color", "#000000") if p else "#000000")
-            c.setAlpha(round(alpha * 255 / 100))
+            c.setAlpha(max(0, min(255, alpha)))
         else:
             c = QColor(20, 20, 30, 200)
         painter.setBrush(c)

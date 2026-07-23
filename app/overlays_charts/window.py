@@ -145,9 +145,15 @@ class ChartsOverlay(OverlayWindow):
             show_hps=True,
             show_dtps=True,
             show_crit=True,
+            value_size=(p.cht_footer_value_size if p else 9),
             filter_widget=self._filter_btn,
         )
         self._layout.addWidget(self._footer)
+
+    def apply_footer_value_size(self, v: int) -> None:
+        self._footer.set_value_size(v)
+        if self._prefs:
+            self._prefs.cht_footer_value_size = v
 
     # ── watcher API ──────────────────────────────────────────────────────────
 
@@ -619,7 +625,7 @@ class ChartsOverlay(OverlayWindow):
         alpha = getattr(p, "cht_win_bg_alpha", 0) if p else 0
         if alpha > 0:
             c = QColor(getattr(p, "cht_win_bg_color", "#000000") if p else "#000000")
-            c.setAlpha(round(alpha * 255 / 100))
+            c.setAlpha(max(0, min(255, alpha)))
         else:
             c = QColor(20, 20, 30, 200)
         painter.setBrush(c)

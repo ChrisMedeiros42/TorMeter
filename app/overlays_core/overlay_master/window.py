@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from PyQt6.QtCore import Qt, QRect, QSize, QTimer
 from PyQt6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPen
 from PyQt6.QtWidgets import (
@@ -55,7 +57,7 @@ class OverlayMasterWindow(OverlayWindow):
         alpha = getattr(p, "om_win_bg_alpha", 0) if p else 0
         if alpha > 0:
             c = QColor(getattr(p, "om_win_bg_color", "#14141E") if p else "#14141E")
-            c.setAlpha(round(alpha * 255 / 100))
+            c.setAlpha(max(0, min(255, alpha)))
         else:
             c = QColor(20, 20, 30, 200)
         painter.setBrush(c)
@@ -93,6 +95,8 @@ class OverlayMasterWindow(OverlayWindow):
         self._linked: dict = {}
         self._vis_checks: dict = {}  # key → QCheckBox for Show/Hide rows
         self._watcher_status_label: QLabel | None = None
+        self._watcher_debug_label: QLabel | None = None
+        self._watcher_debug_checkbox: QCheckBox | None = None
         self._watcher_status_timer: QTimer | None = None
 
         # ── Title ──────────────────────────────────────────────────────────────
@@ -191,6 +195,31 @@ class OverlayMasterWindow(OverlayWindow):
         self._watcher_status_label = watcher_status
         self._layout.addWidget(watcher_status)
 
+        watcher_debug_toggle = QCheckBox("Show Watcher Debug")
+        watcher_debug_toggle.setStyleSheet(
+            "color: rgba(255,255,255,200); font-size: 9px; background: transparent;"
+        )
+        watcher_debug_toggle.setChecked(bool(getattr(p, "om_show_watcher_debug", False) if p else False))
+
+        def _toggle_watcher_debug(checked: bool) -> None:
+            if p:
+                p.om_show_watcher_debug = bool(checked)
+                p.save()
+            self._refresh_watcher_status()
+
+        watcher_debug_toggle.toggled.connect(_toggle_watcher_debug)
+        self._watcher_debug_checkbox = watcher_debug_toggle
+        self._layout.addWidget(watcher_debug_toggle)
+
+        watcher_debug = QLabel("")
+        watcher_debug.setStyleSheet(
+            "color: rgba(255,255,255,160); font-size: 9px; background: transparent;"
+        )
+        watcher_debug.setWordWrap(True)
+        watcher_debug.setContentsMargins(8, 0, 4, 2)
+        self._watcher_debug_label = watcher_debug
+        self._layout.addWidget(watcher_debug)
+
         # ── Player retention row ─────────────────────────────────────────────
         keep_row = QWidget()
         keep_row.setStyleSheet("background: transparent;")
@@ -232,7 +261,7 @@ class OverlayMasterWindow(OverlayWindow):
             "Window BG",
             p.om_win_bg_alpha if p else 0,
             init_color=p.om_win_bg_color if p else "#14141E",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -328,7 +357,7 @@ class OverlayMasterWindow(OverlayWindow):
             "Window BG",
             p.sum_win_bg_alpha if p else 0,
             init_color=p.sum_win_bg_color if p else "#000000",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -403,7 +432,7 @@ class OverlayMasterWindow(OverlayWindow):
             p.sum_dps_bar_fg_size if p else 71,
             init_show=p.sum_dps_bar_fg_show if p else True,
             init_color=p.sum_dps_bar_fg_color if p else "#7A2020",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -489,7 +518,7 @@ class OverlayMasterWindow(OverlayWindow):
             p.sum_def_bar_fg_size if p else 71,
             init_show=p.sum_def_bar_fg_show if p else True,
             init_color=p.sum_def_bar_fg_color if p else "#1E3A7A",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -575,7 +604,7 @@ class OverlayMasterWindow(OverlayWindow):
             p.sum_heal_bar_fg_size if p else 71,
             init_show=p.sum_heal_bar_fg_show if p else True,
             init_color=p.sum_heal_bar_fg_color if p else "#1E6B1E",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -619,7 +648,7 @@ class OverlayMasterWindow(OverlayWindow):
             p.sum_bar_bg_size if p else 12,
             init_show=p.sum_bar_bg_show if p else True,
             init_color=p.sum_bar_bg_color if p else "#FFFFFF",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -864,6 +893,28 @@ class OverlayMasterWindow(OverlayWindow):
                 else None
             ),
         )
+        _add_grid_row(
+            sum_grid,
+            17,
+            False,
+            "Footer Value Size",
+            p.sum_footer_value_size if p else 9,
+            init_show=True,
+            has_size=True,
+            has_color=False,
+            value_range=(6, 24),
+            on_value_change=(
+                (
+                    lambda v: (
+                        setattr(p, "sum_footer_value_size", v),
+                        p.save(),
+                        self._notify("SUM", "apply_footer_value_size", v),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
         def _make_on_change(key, win_name):
             def _fn(b):
                 obs = self._vis_obs_dict.get(win_name)
@@ -959,7 +1010,7 @@ class OverlayMasterWindow(OverlayWindow):
             "Window BG",
             p.dps_win_bg_alpha if p else 0,
             init_color=p.dps_win_bg_color if p else "#000000",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -1116,7 +1167,7 @@ class OverlayMasterWindow(OverlayWindow):
             p.dps_bar_bg_size if p else 12,
             init_show=p.dps_bar_bg_show if p else True,
             init_color=p.dps_bar_bg_color if p else "#FFFFFF",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -1159,7 +1210,7 @@ class OverlayMasterWindow(OverlayWindow):
             p.dps_bar_fg_size if p else 71,
             init_show=p.dps_bar_fg_show if p else True,
             init_color=p.dps_bar_fg_color if p else "#7A2020",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -1243,7 +1294,6 @@ class OverlayMasterWindow(OverlayWindow):
             "Show Companions",
             init_show=p.dps_show_companions if p else False,
             has_size=False,
-            has_color=False,
             on_show_change=(
                 (
                     lambda e: (
@@ -1315,6 +1365,28 @@ class OverlayMasterWindow(OverlayWindow):
                         setattr(p, "dps_row_height", v),
                         p.save(),
                         self._notify("DPS", "apply_row_height", v),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
+        _add_grid_row(
+            dps_grid,
+            13,
+            False,
+            "Footer Value Size",
+            p.dps_footer_value_size if p else 9,
+            init_show=True,
+            has_size=True,
+            has_color=False,
+            value_range=(6, 24),
+            on_value_change=(
+                (
+                    lambda v: (
+                        setattr(p, "dps_footer_value_size", v),
+                        p.save(),
+                        self._notify("DPS", "apply_footer_value_size", v),
                     )
                 )
                 if p
@@ -1401,7 +1473,7 @@ class OverlayMasterWindow(OverlayWindow):
             "Window BG",
             p.def_win_bg_alpha if p else 0,
             init_color=p.def_win_bg_color if p else "#000000",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -1558,7 +1630,7 @@ class OverlayMasterWindow(OverlayWindow):
             p.def_bar_bg_size if p else 12,
             init_show=p.def_bar_bg_show if p else True,
             init_color=p.def_bar_bg_color if p else "#FFFFFF",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -1601,7 +1673,7 @@ class OverlayMasterWindow(OverlayWindow):
             p.def_bar_fg_size if p else 71,
             init_show=p.def_bar_fg_show if p else True,
             init_color=p.def_bar_fg_color if p else "#1E3A7A",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -1763,6 +1835,28 @@ class OverlayMasterWindow(OverlayWindow):
                 else None
             ),
         )
+        _add_grid_row(
+            def_grid,
+            13,
+            False,
+            "Footer Value Size",
+            p.def_footer_value_size if p else 9,
+            init_show=True,
+            has_size=True,
+            has_color=False,
+            value_range=(6, 24),
+            on_value_change=(
+                (
+                    lambda v: (
+                        setattr(p, "def_footer_value_size", v),
+                        p.save(),
+                        self._notify("DEF", "apply_footer_value_size", v),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
         _def_wrapped, _def_cb = _make_show_hide_wrapper(
             def_inner,
             init_visible=self._vis_obs_dict.get("Defense", ObservableValue(p.get("Defense").visible if p else True)).value,
@@ -1843,7 +1937,7 @@ class OverlayMasterWindow(OverlayWindow):
             "Window BG",
             p.heal_win_bg_alpha if p else 0,
             init_color=p.heal_win_bg_color if p else "#000000",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -1874,7 +1968,7 @@ class OverlayMasterWindow(OverlayWindow):
             "HEAL",
             p.heal_heal_size if p else 12,
             init_show=p.heal_heal_show if p else True,
-            init_color=p.heal_heal_color if p else "#32CD32",
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -1916,7 +2010,7 @@ class OverlayMasterWindow(OverlayWindow):
             "Average",
             init_show=p.heal_avg_show if p else True,
             has_size=False,
-            has_color=False,
+            value_range=(0, 255),
             on_show_change=(
                 (
                     lambda e: (
@@ -2000,7 +2094,7 @@ class OverlayMasterWindow(OverlayWindow):
             p.heal_bar_bg_size if p else 12,
             init_show=p.heal_bar_bg_show if p else True,
             init_color=p.heal_bar_bg_color if p else "#FFFFFF",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -2043,7 +2137,7 @@ class OverlayMasterWindow(OverlayWindow):
             p.heal_bar_fg_size if p else 71,
             init_show=p.heal_bar_fg_show if p else True,
             init_color=p.heal_bar_fg_color if p else "#1E6B1E",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -2205,6 +2299,28 @@ class OverlayMasterWindow(OverlayWindow):
                 else None
             ),
         )
+        _add_grid_row(
+            heal_grid,
+            13,
+            False,
+            "Footer Value Size",
+            p.heal_footer_value_size if p else 9,
+            init_show=True,
+            has_size=True,
+            has_color=False,
+            value_range=(6, 24),
+            on_value_change=(
+                (
+                    lambda v: (
+                        setattr(p, "heal_footer_value_size", v),
+                        p.save(),
+                        self._notify("HEAL", "apply_footer_value_size", v),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
         _heal_wrapped, _heal_cb = _make_show_hide_wrapper(
             heal_inner,
             init_visible=self._vis_obs_dict.get("Heal", ObservableValue(p.get("Heal").visible if p else True)).value,
@@ -2270,7 +2386,7 @@ class OverlayMasterWindow(OverlayWindow):
             "Window BG",
             p.coh_win_bg_alpha if p else 0,
             init_color=p.coh_win_bg_color if p else "#000000",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -2397,6 +2513,29 @@ class OverlayMasterWindow(OverlayWindow):
                 else None
             ),
         )
+        _add_grid_row(
+            coh_grid,
+            7,
+            False,
+            "Footer Value Size",
+            p.coh_footer_value_size if p else 9,
+            init_show=True,
+            init_color=None,
+            has_size=True,
+            has_color=False,
+            value_range=(6, 24),
+            on_value_change=(
+                (
+                    lambda v: (
+                        setattr(p, "coh_footer_value_size", v),
+                        p.save(),
+                        self._notify("COH", "apply_footer_value_size", v),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
         _coh_wrapped, _coh_cb = _make_show_hide_wrapper(
             coh_inner,
             init_visible=self._vis_obs_dict.get("Combat History", ObservableValue(p.get("Combat History").visible if p else True)).value,
@@ -2462,7 +2601,7 @@ class OverlayMasterWindow(OverlayWindow):
             "Window BG",
             p.cht_win_bg_alpha if p else 0,
             init_color=p.cht_win_bg_color if p else "#000000",
-            value_range=(0, 100),
+            value_range=(0, 255),
             on_value_change=(
                 (
                     lambda v: (
@@ -2610,6 +2749,29 @@ class OverlayMasterWindow(OverlayWindow):
                 else None
             ),
         )
+        _add_grid_row(
+            cht_grid,
+            8,
+            False,
+            "Footer Value Size",
+            p.cht_footer_value_size if p else 9,
+            init_show=True,
+            init_color=None,
+            has_size=True,
+            has_color=False,
+            value_range=(6, 24),
+            on_value_change=(
+                (
+                    lambda v: (
+                        setattr(p, "cht_footer_value_size", v),
+                        p.save(),
+                        self._notify("CHT", "apply_footer_value_size", v),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
         _cht_wrapped, _cht_cb = _make_show_hide_wrapper(
             cht_inner,
             init_visible=self._vis_obs_dict.get("Charts", ObservableValue(p.get("Charts").visible if p else True)).value,
@@ -2675,6 +2837,8 @@ class OverlayMasterWindow(OverlayWindow):
 
     def _refresh_watcher_status(self) -> None:
         lbl = self._watcher_status_label
+        dbg_lbl = self._watcher_debug_label
+        dbg_cb = self._watcher_debug_checkbox
         if lbl is None:
             return
 
@@ -2687,6 +2851,8 @@ class OverlayMasterWindow(OverlayWindow):
         if watcher is None:
             _set_status_style("rgba(255,255,255,180)")
             lbl.setText("Log Watcher: waiting for watcher...")
+            if dbg_lbl is not None:
+                dbg_lbl.setVisible(False)
             return
 
         log_dir = getattr(watcher, "log_dir", None)
@@ -2701,6 +2867,38 @@ class OverlayMasterWindow(OverlayWindow):
         else:
             _set_status_style("#7bd88f")
         lbl.setText(f"Log Watcher: dir={dir_text} | file={file_text}")
+
+        if dbg_lbl is None:
+            return
+        show_debug = bool(dbg_cb.isChecked()) if dbg_cb is not None else False
+        dbg_lbl.setVisible(show_debug)
+        if not show_debug:
+            return
+
+        now = time.monotonic()
+        current = getattr(watcher, "current_fight", None)
+        open_players = len(getattr(watcher, "_open_players", {}) or {})
+        grace_end_ms = int(getattr(watcher, "_grace_end_ms", 0) or 0)
+        last_event_wall = float(getattr(watcher, "_current_fight_last_event_wall", 0.0) or 0.0)
+        last_damage_wall = float(getattr(watcher, "_current_fight_last_damage_wall", 0.0) or 0.0)
+        last_ts_ms = getattr(watcher, "_last_event_ts_ms", None)
+
+        idle_event_ms = int((now - last_event_wall) * 1000) if last_event_wall > 0 else -1
+        idle_damage_ms = int((now - last_damage_wall) * 1000) if last_damage_wall > 0 else -1
+
+        if current is not None and last_ts_ms is not None and grace_end_ms > 0 and not open_players:
+            grace_left = max(0, grace_end_ms - int(last_ts_ms))
+        else:
+            grace_left = 0
+
+        dbg_lbl.setText(
+            "Watcher Debug: "
+            f"fight_open={'yes' if current is not None else 'no'} | "
+            f"open_players={open_players} | "
+            f"idle_event_ms={idle_event_ms} | "
+            f"idle_damage_ms={idle_damage_ms} | "
+            f"grace_left_ms={grace_left}"
+        )
 
     def link_overlays(
         self,

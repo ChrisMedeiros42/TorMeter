@@ -37,6 +37,7 @@ from app.log_parser import (
     DAMAGE,
     HEAL,
     LogEvent,
+    is_friendly_companion,
     is_friendly_player,
     parse_line,
 )
@@ -60,7 +61,15 @@ PLAYER_TIMEOUT_MS = 240_000
 # After this many ms with no new events in an open fight, force-close it.
 # Prevents ghost fights (e.g. opened by a late post-combat DoT tick) from
 # keeping the fight alive and causing DPS to count down indefinitely.
-_FIGHT_IDLE_CLOSE_MS = 12_000
+_FIGHT_IDLE_CLOSE_MS = 5_000
+
+# Additional guard: close an "open" fight if no damage activity is seen for
+# too long, even if heal/proc log noise is still arriving.
+_FIGHT_NO_DAMAGE_CLOSE_MS = 8_000
+
+# When a fresh EnterCombat arrives after at least this damage gap, split into
+# a new fight even if stale open-player state remains.
+_ENTER_SPLIT_GAP_MS = 2_200
 
 
 class LogWatcher(QObject):
@@ -95,6 +104,8 @@ class LogWatcher(QObject):
         # Wall-clock time when the last event was added to _current_fight.
         # Used to detect and close idle fights even while new log lines arrive.
         self._current_fight_last_event_wall: float = 0.0
+        self._current_fight_last_damage_wall: float = 0.0
+        self._current_fight_last_damage_ts_ms: int | None = None
         self._debug_worker: QThread | None = None
 
         # Track the most recent log timestamp and when it was seen in wall time.
@@ -281,6 +292,8 @@ class LogWatcher(QObject):
             self._last_event_wall = None
             self._last_exit_wall = 0.0
             self._current_fight_last_event_wall = 0.0
+            self._current_fight_last_damage_wall = 0.0
+            self._current_fight_last_damage_ts_ms = None
             self.session_reset.emit()
             if DEBUG and self._file:
                 self._emit_last_fight_async(self._file)
@@ -343,6 +356,11 @@ class LogWatcher(QObject):
         if self._current_fight is not None and self._current_fight_last_event_wall > 0.0:
             now = time.monotonic()
             idle_ms = int((now - self._current_fight_last_event_wall) * 1000)
+            no_dmg_ms = (
+                int((now - self._current_fight_last_damage_wall) * 1000)
+                if self._current_fight_last_damage_wall > 0.0
+                else 0
+            )
             if idle_ms > _FIGHT_IDLE_CLOSE_MS:
                 self._last_exit_wall = now
                 self._current_fight.end_ms = self._last_event_ts_ms or self._current_fight.end_ms
@@ -352,6 +370,19 @@ class LogWatcher(QObject):
                 self._open_players = {}
                 self._grace_end_ms = 0
                 self._current_fight_last_event_wall = 0.0
+                self._current_fight_last_damage_wall = 0.0
+                self._current_fight_last_damage_ts_ms = None
+            elif no_dmg_ms > _FIGHT_NO_DAMAGE_CLOSE_MS:
+                self._last_exit_wall = now
+                self._current_fight.end_ms = self._last_event_ts_ms or self._current_fight.end_ms
+                self._session.fights.append(self._current_fight)
+                self.fight_closed.emit(self._current_fight)
+                self._current_fight = None
+                self._open_players = {}
+                self._grace_end_ms = 0
+                self._current_fight_last_event_wall = 0.0
+                self._current_fight_last_damage_wall = 0.0
+                self._current_fight_last_damage_ts_ms = None
 
         if not raw_lines:
             # No fresh lines this tick.
@@ -373,6 +404,8 @@ class LogWatcher(QObject):
                         self._open_players = {}
                         self._grace_end_ms = 0
                         self._current_fight_last_event_wall = 0.0
+                        self._current_fight_last_damage_wall = 0.0
+                        self._current_fight_last_damage_ts_ms = None
                     else:
                         self.fight_updated.emit(self._current_fight)
                 elif elapsed_ms > _FIGHT_IDLE_CLOSE_MS:
@@ -386,6 +419,8 @@ class LogWatcher(QObject):
                     self._open_players = {}
                     self._grace_end_ms = 0
                     self._current_fight_last_event_wall = 0.0
+                    self._current_fight_last_damage_wall = 0.0
+                    self._current_fight_last_damage_ts_ms = None
                 else:
                     self.fight_updated.emit(self._current_fight)
             return
@@ -404,6 +439,78 @@ class LogWatcher(QObject):
 
     def _ingest(self, events: list[LogEvent]) -> None:
         """Update live session state for a batch of new events."""
+
+        def _aid(entity) -> str | None:
+            if entity is None or not is_friendly_player(entity):
+                return None
+            return entity.account_id or entity.name
+
+        def _is_open_participant_event(ev: LogEvent) -> bool:
+            """True when event involves currently open players or companions."""
+            src_aid = _aid(ev.source)
+            tgt_aid = _aid(ev.target)
+            if src_aid in self._open_players or tgt_aid in self._open_players:
+                return True
+
+            # Companion events should count while any player is still marked in combat.
+            if is_friendly_companion(ev.source) or is_friendly_companion(ev.target):
+                return True
+
+            return False
+
+        def _is_fight_activity(ev: LogEvent) -> bool:
+            """True when an event should keep an open fight alive."""
+            if (
+                ev.effect_type == EVENT
+                and ev.effect_name in (ENTER_COMBAT, EXIT_COMBAT)
+                and is_friendly_player(ev.source)
+            ):
+                return True
+            if (
+                ev.effect_type == APPLY_EFFECT
+                and ev.effect_name in (DAMAGE, HEAL)
+            ):
+                if not (
+                    is_friendly_player(ev.source)
+                    or is_friendly_player(ev.target)
+                    or is_friendly_companion(ev.source)
+                    or is_friendly_companion(ev.target)
+                ):
+                    return False
+
+                # While players are actively in combat, only accept events tied
+                # to those open participants (or companions).
+                if self._open_players:
+                    return _is_open_participant_event(ev)
+
+                # After all exits, only keep short trailing effects in grace.
+                if self._current_fight is not None:
+                    return ev.timestamp_ms <= self._grace_end_ms
+
+                return False
+            return False
+
+        def _is_stat_relevant(ev: LogEvent) -> bool:
+            """True when event should be collected into current fight stats/history."""
+            if (
+                ev.effect_type == EVENT
+                and ev.effect_name in (ENTER_COMBAT, EXIT_COMBAT)
+                and is_friendly_player(ev.source)
+            ):
+                return True
+            if (
+                ev.effect_type == APPLY_EFFECT
+                and ev.effect_name in (DAMAGE, HEAL)
+                and (
+                    is_friendly_player(ev.source)
+                    or is_friendly_player(ev.target)
+                    or is_friendly_companion(ev.source)
+                    or is_friendly_companion(ev.target)
+                )
+            ):
+                return True
+            return False
+
         for event in events:
             self._last_event_ts_ms = event.timestamp_ms
             self._last_event_wall = time.monotonic()
@@ -439,6 +546,22 @@ class LogWatcher(QObject):
             # ── Open new fight ────────────────────────────────────────────────
             if is_enter:
                 aid = event.source.account_id or event.source.name
+                # If an EnterCombat arrives after a real damage lull, split the
+                # previous fight even if stale open-player state remains.
+                if (
+                    self._current_fight is not None
+                    and self._current_fight_last_damage_ts_ms is not None
+                    and (event.timestamp_ms - self._current_fight_last_damage_ts_ms) > _ENTER_SPLIT_GAP_MS
+                ):
+                    self._session.fights.append(self._current_fight)
+                    self.fight_closed.emit(self._current_fight)
+                    self._current_fight = None
+                    self._open_players = {}
+                    self._grace_end_ms = 0
+                    self._current_fight_last_event_wall = 0.0
+                    self._current_fight_last_damage_wall = 0.0
+                    self._current_fight_last_damage_ts_ms = None
+
                 if self._current_fight is None:
                     self._current_fight = Fight(
                         index=len(self._session.fights) + 1,
@@ -446,6 +569,8 @@ class LogWatcher(QObject):
                         end_ms=event.timestamp_ms,
                     )
                     self._current_fight_last_event_wall = time.monotonic()
+                    self._current_fight_last_damage_wall = time.monotonic()
+                    self._current_fight_last_damage_ts_ms = event.timestamp_ms
                     self.fight_opened.emit(self._current_fight)
                 self._open_players[aid] = event.source
 
@@ -453,15 +578,19 @@ class LogWatcher(QObject):
             # If TorMeter missed the EnterCombat event (started while player was
             # already in combat), auto-open a fight on the first combat activity
             # so stats are not silently dropped.
-            # Guard: don't fire within 5 s of the last ExitCombat to avoid
-            # opening a ghost fight from a late post-combat DoT tick.
-            _IMPLICIT_OPEN_COOLDOWN_S = 5.0
+            # Guard heal-only implicit opens briefly after ExitCombat to avoid
+            # ghost fights from trailing HoTs/procs, but allow damage to reopen
+            # immediately so real pulls are not dropped.
+            _IMPLICIT_HEAL_COOLDOWN_S = 0.2
             if (
                 self._current_fight is None
                 and is_friendly_player(event.source)
                 and event.effect_type == APPLY_EFFECT
                 and event.effect_name in (DAMAGE, HEAL)
-                and (time.monotonic() - self._last_exit_wall) > _IMPLICIT_OPEN_COOLDOWN_S
+                and (
+                    event.effect_name == DAMAGE
+                    or (time.monotonic() - self._last_exit_wall) > _IMPLICIT_HEAL_COOLDOWN_S
+                )
             ):
                 self._current_fight = Fight(
                     index=len(self._session.fights) + 1,
@@ -471,14 +600,32 @@ class LogWatcher(QObject):
                 aid = event.source.account_id or event.source.name
                 self._open_players[aid] = event.source
                 self._current_fight_last_event_wall = time.monotonic()
+                self._current_fight_last_damage_wall = time.monotonic()
+                self._current_fight_last_damage_ts_ms = event.timestamp_ms
                 self.fight_opened.emit(self._current_fight)
 
             # ── Collect event ─────────────────────────────────────────────────
             if self._current_fight is not None:
-                self._current_fight.set_temp_end_ms(event.timestamp_ms)
-                self._current_fight.events.append(event)
-                self._current_fight_last_event_wall = time.monotonic()
-                _accumulate_stats(self._current_fight, event)
+                if _is_stat_relevant(event):
+                    # When a friendly player contributes damage, treat them as
+                    # an active participant even if EnterCombat was missed.
+                    if event.effect_type == APPLY_EFFECT and event.effect_name == DAMAGE:
+                        src_aid = _aid(event.source)
+                        tgt_aid = _aid(event.target)
+                        if src_aid is not None:
+                            self._open_players.setdefault(src_aid, event.source)
+                        if tgt_aid is not None:
+                            self._open_players.setdefault(tgt_aid, event.target)
+
+                    self._current_fight.set_temp_end_ms(event.timestamp_ms)
+                    self._current_fight.events.append(event)
+                    _accumulate_stats(self._current_fight, event)
+
+                if _is_fight_activity(event):
+                    self._current_fight_last_event_wall = time.monotonic()
+                    if event.effect_type == APPLY_EFFECT and event.effect_name == DAMAGE:
+                        self._current_fight_last_damage_wall = time.monotonic()
+                        self._current_fight_last_damage_ts_ms = event.timestamp_ms
 
             # ── Exit combat ───────────────────────────────────────────────────
             if is_exit and self._current_fight is not None:
