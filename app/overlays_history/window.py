@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import re
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from app.combat_session import CombatSession, Fight
 from app.log_watcher import LogWatcher
-from app.overlays_shared.player_match import player_stats_matches
+from app.overlays_shared.player_match import player_name_matches, player_stats_matches
 from app.overlays_shared.widgets import _ComboArrowNav, _LocalPlayerFooter, _PlayerFilterButton, _Separator
 from app.session_loader import SessionLoader
 from app.window import OverlayWindow
@@ -27,6 +27,7 @@ class CombatHistoryOverlay(OverlayWindow):
         p = self._prefs
         self._session: CombatSession | None = None
         self._my_name: str | None = None
+        self._display_player: str | None = None  # player shown in fight/session rows
         self._selected_fight: Fight | None = None
         self._fight_rows: list[_FightRow] = []
         self._session_loader: SessionLoader | None = None
@@ -59,6 +60,27 @@ class CombatHistoryOverlay(OverlayWindow):
         sel_l.addWidget(_ComboArrowNav(self._session_combo))
         sel_l.addStretch(1)
         self._layout.addWidget(sel_row)
+
+        # ── player selector combobox ────────────────────────────────────────
+        player_row = QWidget()
+        player_row.setStyleSheet("background: transparent;")
+        player_l = QHBoxLayout(player_row)
+        player_l.setContentsMargins(4, 2, 4, 2)
+        player_l.setSpacing(4)
+        player_lbl = QLabel("Player:")
+        player_lbl.setStyleSheet(_LABEL_STYLE)
+        self._player_sel_lbl = player_lbl
+        player_l.addWidget(player_lbl)
+        self._player_combo = QComboBox()
+        self._player_combo.setStyleSheet(_COMBO_STYLE)
+        self._player_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
+        self._player_combo.currentIndexChanged.connect(self._on_player_combo_changed)
+        player_l.addWidget(self._player_combo)
+        player_l.addWidget(_ComboArrowNav(self._player_combo))
+        player_l.addStretch(1)
+        self._layout.addWidget(player_row)
 
         # ── column header ───────────────────────────────────────────────────
         hdr_row = QWidget()
@@ -160,6 +182,8 @@ class CombatHistoryOverlay(OverlayWindow):
         self._session_row.set_name_size(v)
         for row in self._fight_rows:
             row.set_name_size(v)
+        if self._live_fight_row is not None:
+            self._live_fight_row.set_name_size(v)
 
     def apply_name_color(self, c: str) -> None:
         if self._prefs:
@@ -169,6 +193,10 @@ class CombatHistoryOverlay(OverlayWindow):
         if self._prefs:
             self._prefs.coh_stat_size = v
         self._session_row.set_stat_size(v)
+        for row in self._fight_rows:
+            row.set_stat_size(v)
+        if self._live_fight_row is not None:
+            self._live_fight_row.set_stat_size(v)
         for lbl in self._hdr_stat_labels:
             lbl.setStyleSheet(
                 re.sub(r"font-size:\s*\d+px", f"font-size: {v}px", lbl.styleSheet())
@@ -178,8 +206,6 @@ class CombatHistoryOverlay(OverlayWindow):
         self._footer.set_value_size(v)
         if self._prefs:
             self._prefs.coh_footer_value_size = v
-        for row in self._fight_rows:
-            row.set_stat_size(v)
 
     def apply_list_height(self, v: int) -> None:
         self._scroll.MAX_H = v
@@ -194,9 +220,11 @@ class CombatHistoryOverlay(OverlayWindow):
             self._prefs.coh_label_size = v
         style = re.sub(r"font-size:\s*\d+px", f"font-size: {v}px", _LABEL_STYLE)
         self._sel_lbl.setStyleSheet(style)
+        self._player_sel_lbl.setStyleSheet(style)
         self._hdr_fight_lbl.setStyleSheet(style)
         combo_style = re.sub(r"font-size:\s*\d+px", f"font-size: {v}px", _COMBO_STYLE)
         self._session_combo.setStyleSheet(combo_style)
+        self._player_combo.setStyleSheet(combo_style)
         for lbl in self._hdr_stat_labels:
             lbl.setStyleSheet(
                 re.sub(r"font-size:\s*\d+px", f"font-size: {v}px", lbl.styleSheet())
@@ -205,13 +233,30 @@ class CombatHistoryOverlay(OverlayWindow):
     def apply_character_name(self, name: str) -> None:
         self._my_name = (name or "").strip() or None
 
-        for row in self._fight_rows:
-            row.set_my_name(self._my_name)
-        if self._live_fight_row is not None:
-            self._live_fight_row.set_my_name(self._my_name)
+        # In live mode, sync the player combo to the configured character name.
+        if self._viewing_live and self._my_name:
+            idx = next(
+                (
+                    i
+                    for i in range(self._player_combo.count())
+                    if player_name_matches(self._my_name, self._player_combo.itemText(i))
+                ),
+                -1,
+            )
+            if idx >= 0:
+                # setCurrentIndex triggers _on_player_combo_changed which
+                # updates _display_player and refreshes all rows.
+                self._player_combo.setCurrentIndex(idx)
+            else:
+                # Player not in combo yet (no fights yet); update directly.
+                self._display_player = self._my_name
+                for row in self._fight_rows:
+                    row.set_my_name(self._display_player)
+                if self._live_fight_row is not None:
+                    self._live_fight_row.set_my_name(self._display_player)
+                self._rebuild_session_row()
 
-        self._rebuild_session_row()
-
+        # Footer always shows the local player's stats for the selected fight.
         if self._selected_fight is not None and self._my_name is not None:
             stats = next(
                 (
@@ -246,14 +291,20 @@ class CombatHistoryOverlay(OverlayWindow):
         if not self._viewing_live:
             return
         self._remove_live_fight_row()
-        row = _FightRow(fight, self._my_name, on_select=self._on_fight_selected)
+        # Collapse all existing rows silently before highlighting the new fight.
+        for existing in self._fight_rows:
+            existing.collapse(notify=False)
+        self._selected_fight = None
+        row = _FightRow(fight, self._display_player, on_select=self._on_fight_selected)
         row.update_filter(self._filter_btn.hidden_players)
         if p:
             row.set_name_size(p.coh_name_size)
             row.set_stat_size(p.coh_stat_size)
-        count = self._list_layout.count()
-        self._list_layout.insertWidget(count - 1, row)
+        # Insert at the top so the current fight is always first.
+        self._list_layout.insertWidget(0, row)
+        row.expand()
         self._live_fight_row = row
+        QTimer.singleShot(0, lambda: self._scroll.verticalScrollBar().setValue(0))
         self._resize_to_content()
 
     def _remove_live_fight_row(self) -> None:
@@ -273,20 +324,29 @@ class CombatHistoryOverlay(OverlayWindow):
         if not self._viewing_live:
             return
 
-        row = _FightRow(fight, self._my_name, on_select=self._on_fight_selected)
+        # Rebuild player combo first so _display_player is current.
+        self._rebuild_player_combo(self._session)
+
+        # Collapse all existing rows silently before showing the finished fight.
+        for existing in self._fight_rows:
+            existing.collapse(notify=False)
+        self._selected_fight = None
+
+        row = _FightRow(fight, self._display_player, on_select=self._on_fight_selected)
         row.update_filter(self._filter_btn.hidden_players)
         if p:
             row.set_name_size(p.coh_name_size)
             row.set_stat_size(p.coh_stat_size)
-        # Insert before the stretch item at the end
-        count = self._list_layout.count()
-        self._list_layout.insertWidget(count - 1, row)
-        self._fight_rows.append(row)
+        # Insert at the top so the most recent fight is always first.
+        self._list_layout.insertWidget(0, row)
+        row.expand()
+        self._fight_rows.insert(0, row)
 
         # Update filter player list
         self._update_filter_players()
         # Rebuild session row
         self._rebuild_session_row()
+        QTimer.singleShot(0, lambda: self._scroll.verticalScrollBar().setValue(0))
         self._resize_to_content()
 
     def _on_live_fight_updated(self, fight: Fight) -> None:
@@ -315,6 +375,11 @@ class CombatHistoryOverlay(OverlayWindow):
             row.deleteLater()
         self._fight_rows.clear()
         self._filter_btn.set_players([])
+        # Clear player combo; it will repopulate as new fights come in.
+        self._player_combo.blockSignals(True)
+        self._player_combo.clear()
+        self._display_player = self._my_name  # keep targeting local player
+        self._player_combo.blockSignals(False)
         self._rebuild_session_row()
         self._footer.update_stats(None, 1.0)
         self._selected_fight = None
@@ -338,7 +403,11 @@ class CombatHistoryOverlay(OverlayWindow):
         session = (
             self._watcher.session if hasattr(self, "_watcher") else CombatSession()
         )
-        new_row = _SessionRow(session, self._my_name)
+        new_row = _SessionRow(session, self._display_player)
+        p = self._prefs
+        if p:
+            new_row.set_name_size(p.coh_name_size)
+            new_row.set_stat_size(p.coh_stat_size)
         # Replace old row in layout
         idx = self._layout.indexOf(self._session_row)
         if idx >= 0:
@@ -385,24 +454,21 @@ class CombatHistoryOverlay(OverlayWindow):
         self._footer.update_stats(None, 1.0)
 
         p = self._prefs
-        # For historical sessions, don't try to match the current character name —
-        # the log may be from a different character or server.
-        my_name = (
-            ((p.character_name if p and p.character_name else "") if p else None)
-            if self._viewing_live
-            else None
-        )
+        # Populate the player combo from this session and determine _display_player.
+        self._rebuild_player_combo(session)
+
+        # Insert fights so the most recent appears at the top.
+        # Each fight is inserted at position 0, so the last fight ends up first.
         for fight in session.fights:
-            row = _FightRow(fight, my_name, on_select=self._on_fight_selected)
+            row = _FightRow(fight, self._display_player, on_select=self._on_fight_selected)
             if p:
                 row.set_name_size(p.coh_name_size)
                 row.set_stat_size(p.coh_stat_size)
-            count = self._list_layout.count()
-            self._list_layout.insertWidget(count - 1, row)
-            self._fight_rows.append(row)
+            self._list_layout.insertWidget(0, row)
+            self._fight_rows.insert(0, row)
 
         # Update session summary row and filter
-        new_row = _SessionRow(session, my_name)
+        new_row = _SessionRow(session, self._display_player)
         if p:
             new_row.set_name_size(p.coh_name_size)
             new_row.set_stat_size(p.coh_stat_size)
@@ -423,6 +489,52 @@ class CombatHistoryOverlay(OverlayWindow):
         for row in self._fight_rows:
             row.update_filter(hidden)
 
+        self._resize_to_content()
+
+    def _rebuild_player_combo(self, session: CombatSession) -> None:
+        """Rebuild the player selector combo with all players from the session."""
+        names: list[str] = []
+        for aid in session.all_player_ids():
+            agg = session.aggregate_player_stats(aid)
+            if agg is not None:
+                names.append(agg.name)
+        names.sort()
+
+        self._player_combo.blockSignals(True)
+        prev_text = self._player_combo.currentText()
+        self._player_combo.clear()
+        for name in names:
+            self._player_combo.addItem(name)
+
+        # Selection priority: previously selected player > local character name > first item.
+        target = prev_text or self._my_name
+        if target:
+            idx = next(
+                (
+                    i
+                    for i in range(self._player_combo.count())
+                    if player_name_matches(target, self._player_combo.itemText(i))
+                ),
+                -1,
+            )
+            if idx >= 0:
+                self._player_combo.setCurrentIndex(idx)
+            elif self._player_combo.count() > 0:
+                self._player_combo.setCurrentIndex(0)
+        elif self._player_combo.count() > 0:
+            self._player_combo.setCurrentIndex(0)
+
+        self._display_player = self._player_combo.currentText() or None
+        self._player_combo.blockSignals(False)
+
+    def _on_player_combo_changed(self) -> None:
+        """Called when the user picks a different player from the selector."""
+        self._display_player = self._player_combo.currentText() or None
+        for row in self._fight_rows:
+            row.set_my_name(self._display_player)
+        if self._live_fight_row is not None:
+            self._live_fight_row.set_my_name(self._display_player)
+        self._rebuild_session_row()
         self._resize_to_content()
 
     def _update_filter_players(self) -> None:

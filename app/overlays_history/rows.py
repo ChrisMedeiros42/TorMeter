@@ -288,6 +288,8 @@ class _FightRow(QWidget):
         self._my_name = my_name
         self._on_select = on_select
         self._expanded = False
+        self._name_pt: int | None = None  # remembered for _rebuild_detail
+        self._stat_pt: int | None = None
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -396,8 +398,16 @@ class _FightRow(QWidget):
             if item and item.widget():
                 item.widget().setParent(None)
         self._populate_detail(detail_l)
+        # Reapply stored sizes to freshly created detail rows.
+        if self._name_pt is not None:
+            for row in self._detail_rows:
+                row.set_name_size(self._name_pt)
+        if self._stat_pt is not None:
+            for row in self._detail_rows:
+                row.set_stat_size(self._stat_pt)
 
     def set_name_size(self, pt: int) -> None:
+        self._name_pt = pt
         self._name_lbl.setStyleSheet(
             f"color: white; font-size: {pt}px; font-weight: bold; background: transparent;"
         )
@@ -405,10 +415,29 @@ class _FightRow(QWidget):
             row.set_name_size(pt)
 
     def set_stat_size(self, pt: int) -> None:
+        self._stat_pt = pt
         for cell in self._summary_stat_cells:
             cell.set_font_size(pt)
         for row in self._detail_rows:
             row.set_stat_size(pt)
+
+    def expand(self) -> None:
+        """Programmatically expand this row."""
+        if not self._expanded:
+            self._expanded = True
+            self._detail.setVisible(True)
+            self._arrow.setText("▼")
+            if self._on_select:
+                self._on_select(self._fight)
+
+    def collapse(self, *, notify: bool = True) -> None:
+        """Programmatically collapse this row."""
+        if self._expanded:
+            self._expanded = False
+            self._detail.setVisible(False)
+            self._arrow.setText("▶")
+            if notify and self._on_select:
+                self._on_select(None)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:

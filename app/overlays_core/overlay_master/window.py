@@ -94,6 +94,7 @@ class OverlayMasterWindow(OverlayWindow):
         p = self._prefs
         self._linked: dict = {}
         self._vis_checks: dict = {}  # key → QCheckBox for Show/Hide rows
+        self._win_size_sliders: dict = {}  # key → {"width": QSlider, "height": QSlider}
         self._watcher_status_label: QLabel | None = None
         self._watcher_debug_label: QLabel | None = None
         self._watcher_debug_checkbox: QCheckBox | None = None
@@ -2782,6 +2783,26 @@ class OverlayMasterWindow(OverlayWindow):
             "CHT", "#2A1A3A", _cht_wrapped, on_collapse_change=self._resize_to_content,
         )
 
+        # ── Store width/height slider refs for drag-resize → OM sync ───────────
+        for _k, _g, _wr, _hr in (
+            ("SUM", sum_grid, 1, None),
+            ("DPS", dps_grid, 1, None),
+            ("DEF", def_grid, 1, None),
+            ("HEAL", heal_grid, 1, None),
+            ("COH", coh_grid, 0, 1),
+            ("CHT", cht_grid, 0, 1),
+        ):
+            _sl: dict = {}
+            _wi = _g.itemAtPosition(_wr, 2)
+            if _wi is not None:
+                _sl["width"] = _wi.widget()
+            if _hr is not None:
+                _hi = _g.itemAtPosition(_hr, 2)
+                if _hi is not None:
+                    _sl["height"] = _hi.widget()
+            if _sl:
+                self._win_size_sliders[_k] = _sl
+
         # ── Scrollable sections wrapper (max 600 px tall) ─────────────────────
         sections_container = QWidget()
         sections_container.setStyleSheet("background: transparent;")
@@ -2796,6 +2817,20 @@ class OverlayMasterWindow(OverlayWindow):
         self._scroll_area = _AutoScrollArea()
         self._scroll_area.setWidget(sections_container)
         self._layout.addWidget(self._scroll_area)
+
+    def _on_win_resized_by_user(self, win_key: str, total_w: int, total_h: int) -> None:
+        """Update OM sliders when an overlay is resized via its drag handle."""
+        from app.window import BORDER_WIDTH, CONTENT_PADDING, MENU_BAR_HEIGHT as _MBH
+        co = BORDER_WIDTH + CONTENT_PADDING
+        content_w = max(1, total_w - co * 2)
+        content_h = max(1, total_h - _MBH - co)
+        sliders = self._win_size_sliders.get(win_key, {})
+        w_slider = sliders.get("width")
+        h_slider = sliders.get("height")
+        if w_slider is not None:
+            w_slider.setValue(content_w)  # fires on_value_change → saves pref + notifies overlay
+        if h_slider is not None:
+            h_slider.setValue(content_h)
 
     def _notify(self, win_key: str, method: str, value) -> None:
         """Forward a live setting change to a linked stat overlay."""
@@ -2948,6 +2983,16 @@ class OverlayMasterWindow(OverlayWindow):
             "apply_character_name",
             (p.character_name.strip() if p and p.character_name else ""),
         )
+
+        # Wire drag-resize → OM slider callbacks for all linked overlays.
+        def _make_resize_cb(win_key: str):
+            def _cb(total_w: int, total_h: int) -> None:
+                self._on_win_resized_by_user(win_key, total_w, total_h)
+            return _cb
+
+        for _key, _win in self._linked.items():
+            if hasattr(_win, "_manual_resize_callback"):
+                _win._manual_resize_callback = _make_resize_cb(_key)
 
 
 # ── stat progress bar ────────────────────────────────────────────────────────

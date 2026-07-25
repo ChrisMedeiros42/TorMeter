@@ -47,6 +47,7 @@ class OverlayWindow(QWidget):
         self._programmatic_resize = False
         self._manual_window_size: QSize | None = None
         self._vis_obs: ObservableValue | None = None
+        self._manual_resize_callback = None  # set by OverlayMasterWindow to sync sliders
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -226,6 +227,8 @@ class OverlayWindow(QWidget):
         self._sync_layout_geometry()
         if not self._programmatic_resize:
             self._manual_window_size = self.size()
+            if self._manual_resize_callback is not None:
+                self._manual_resize_callback(self.width(), self.height())
 
     def _close_btn_rect(self) -> QRect:
         x = self.width() - BORDER_WIDTH - CLOSE_BTN_MARGIN - CLOSE_BTN_SIZE
