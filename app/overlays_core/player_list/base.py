@@ -23,6 +23,24 @@ class _PlayerListOverlay(OverlayWindow):
     bar_color: str = "#444444"
     prefs_prefix: str = ""  # "dps", "def", "heal"
 
+    def _init_resize_debounce(self) -> None:
+        # Coalesce bursts of resize requests during live updates.
+        self._resize_debounce_timer = QTimer(self)
+        self._resize_debounce_timer.setSingleShot(True)
+        self._resize_debounce_timer.setInterval(120)
+        self._resize_debounce_timer.timeout.connect(self._resize_to_content)
+
+    def _request_resize_to_content(self) -> None:
+        timer = getattr(self, "_resize_debounce_timer", None)
+        if timer is None:
+            self._resize_to_content()
+            return
+        timer.start()
+
+    def _set_row_visible(self, row: PlayerRow, visible: bool) -> None:
+        if row.isVisible() != visible:
+            row.setVisible(visible)
+
     def _setup_content(self):
         p = self._prefs
         g = self.prefs_prefix
@@ -141,10 +159,12 @@ class _PlayerListOverlay(OverlayWindow):
         self._show_companions: bool = _pv(f"{g}_show_companions", False)
         self._last_fight: Fight | None = None
         self._player_last_seen_wall: dict[str, float] = {}  # account_id → monotonic
+        self._last_visible_order: tuple[str, ...] = ()
         self._timeout_timer = QTimer(self)
         self._timeout_timer.setInterval(2000)
         self._timeout_timer.timeout.connect(self._prune_timed_out_players)
         self._timeout_timer.start()
+        self._init_resize_debounce()
 
     # ── live data API ─────────────────────────────────────────────────────────
 
@@ -262,7 +282,7 @@ class _PlayerListOverlay(OverlayWindow):
         # Keep recently-seen players visible even when score is currently zero.
         for row in self._rows:
             aid = getattr(row, "_account_id", row._name_lbl.text())
-            row.setVisible(row._name_lbl.text() in active_names or _is_recent(aid))
+            self._set_row_visible(row, row._name_lbl.text() in active_names or _is_recent(aid))
 
         # Update or add rows, then reorder layout to match sorted order
         inner = getattr(self, "_inner_layout", None)
@@ -280,7 +300,7 @@ class _PlayerListOverlay(OverlayWindow):
             )
             if row is None:
                 row = self._add_player_row(name, account_id=aid, is_me=is_me)
-            row.setVisible(True)
+            self._set_row_visible(row, True)
             row._bar.update_data(val, raw_total, fill_value=score, fill_total=total_score)
             row._score_lbl.setText(fmt_num(score))
             row_scores[row] = score
@@ -300,9 +320,14 @@ class _PlayerListOverlay(OverlayWindow):
         if inner is not None:
             visible_rows = [r for r in self._rows if r.isVisible()]
             visible_rows.sort(key=lambda r: row_scores.get(r, 0.0), reverse=True)
-            for row in visible_rows:
-                inner.removeWidget(row)
-                inner.addWidget(row)
+            visible_order = tuple(
+                str(getattr(r, "_account_id", r._name_lbl.text())) for r in visible_rows
+            )
+            if visible_order != self._last_visible_order:
+                for row in visible_rows:
+                    inner.removeWidget(row)
+                    inner.addWidget(row)
+                self._last_visible_order = visible_order
 
         # Update footer for local player
         if my_name:
@@ -311,7 +336,7 @@ class _PlayerListOverlay(OverlayWindow):
                 None,
             )
             self._footer.update_stats(my_stats, duration_s)
-        self._resize_to_content()
+        self._request_resize_to_content()
 
     def _on_fight_closed(self, fight: "Fight") -> None:
         self._on_fight_updated(fight)
@@ -329,6 +354,7 @@ class _PlayerListOverlay(OverlayWindow):
             row.deleteLater()
             self._rows.remove(row)
         self._player_last_seen_wall.clear()
+        self._last_visible_order = ()
         self._last_fight = None
         # Keep footer visible with last known stats; they'll update on next fight
         self._resize_to_content()
@@ -408,6 +434,7 @@ class _PlayerListOverlay(OverlayWindow):
                 self._rows.remove(row)
                 self._player_last_seen_wall.pop(aid, None)
         if to_remove:
+            self._last_visible_order = ()
             self._resize_to_content()
 
     def _display_keep_ms(self) -> int:

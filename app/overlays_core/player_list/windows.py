@@ -169,10 +169,12 @@ class SummaryWindow(_PlayerListOverlay):
         self._player_last_seen_wall: dict[str, float] = {}
         self._show_companions: bool = _pv("sum_show_companions", False)
         self._last_fight: Fight | None = None
+        self._last_visible_order: tuple[str, ...] = ()
         self._timeout_timer = QTimer(self)
         self._timeout_timer.setInterval(2000)
         self._timeout_timer.timeout.connect(self._prune_timed_out_players)
         self._timeout_timer.start()
+        self._init_resize_debounce()
 
     def apply_footer_value_size(self, v: int) -> None:
         self._footer.set_value_size(v)
@@ -236,7 +238,7 @@ class SummaryWindow(_PlayerListOverlay):
             # Ensure _account_id is set so the "recent-but-inactive" reset loop
             # below can correctly identify this row as active via active_ids.
             row._account_id = aid
-            row.setVisible(True)
+            self._set_row_visible(row, True)
             row._score_lbl.setText(fmt_num(score))
             scored.append((score, aid, stats, row))
 
@@ -246,7 +248,7 @@ class SummaryWindow(_PlayerListOverlay):
 
         for row in self._rows:
             aid = getattr(row, "_account_id", row._name_lbl.text())
-            row.setVisible(row._name_lbl.text() in active_names or _is_recent(aid))
+            self._set_row_visible(row, row._name_lbl.text() in active_names or _is_recent(aid))
 
         total_score = sum(s for s, _, _, _ in scored) or 1.0
         row_scores: dict[object, float] = {}
@@ -279,9 +281,14 @@ class SummaryWindow(_PlayerListOverlay):
         if inner is not None:
             visible_rows = [r for r in self._rows if r.isVisible()]
             visible_rows.sort(key=lambda r: row_scores.get(r, 0.0), reverse=True)
-            for row in visible_rows:
-                inner.removeWidget(row)
-                inner.addWidget(row)
+            visible_order = tuple(
+                str(getattr(r, "_account_id", r._name_lbl.text())) for r in visible_rows
+            )
+            if visible_order != self._last_visible_order:
+                for row in visible_rows:
+                    inner.removeWidget(row)
+                    inner.addWidget(row)
+                self._last_visible_order = visible_order
 
         if my_name:
             my_stats = next(
@@ -290,7 +297,7 @@ class SummaryWindow(_PlayerListOverlay):
             )
             self._footer.update_stats(my_stats, duration_s)
 
-        self._resize_to_content()
+        self._request_resize_to_content()
 
     def _on_fight_closed(self, fight: "Fight") -> None:
         self._on_fight_updated(fight)
@@ -307,6 +314,7 @@ class SummaryWindow(_PlayerListOverlay):
             row.deleteLater()
             self._rows.remove(row)
         self._player_last_seen_wall.clear()
+        self._last_visible_order = ()
         self._last_fight = None
         self._resize_to_content()
 
@@ -388,6 +396,7 @@ class SummaryWindow(_PlayerListOverlay):
                 self._rows.remove(row)
                 self._player_last_seen_wall.pop(aid, None)
         if to_remove_ids:
+            self._last_visible_order = ()
             self._resize_to_content()
 
     def apply_character_name(self, name: str) -> None:

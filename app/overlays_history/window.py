@@ -23,6 +23,20 @@ class CombatHistoryOverlay(OverlayWindow):
     window_name = "Combat History"
     _min_content_width = 340
 
+    def _init_resize_debounce(self) -> None:
+        # Coalesce resize bursts caused by rapid fight/session UI updates.
+        self._resize_debounce_timer = QTimer(self)
+        self._resize_debounce_timer.setSingleShot(True)
+        self._resize_debounce_timer.setInterval(120)
+        self._resize_debounce_timer.timeout.connect(self._resize_to_content)
+
+    def _request_resize_to_content(self) -> None:
+        timer = getattr(self, "_resize_debounce_timer", None)
+        if timer is None:
+            self._resize_to_content()
+            return
+        timer.start()
+
     def _setup_content(self):
         p = self._prefs
         self._session: CombatSession | None = None
@@ -151,6 +165,7 @@ class CombatHistoryOverlay(OverlayWindow):
             self.apply_name_size(p.coh_name_size)
             self.apply_stat_size(p.coh_stat_size)
             self.apply_text_size(p.coh_label_size)
+        self._init_resize_debounce()
 
     # ── apply_* API (called by OverlayMasterWindow) ───────────────────────────
 
@@ -270,7 +285,7 @@ class CombatHistoryOverlay(OverlayWindow):
         else:
             self._footer.update_stats(None, 1.0)
 
-        self._resize_to_content()
+        self._request_resize_to_content()
 
     # ── watcher API ──────────────────────────────────────────────────────────
 
@@ -305,7 +320,7 @@ class CombatHistoryOverlay(OverlayWindow):
         row.expand()
         self._live_fight_row = row
         QTimer.singleShot(0, lambda: self._scroll.verticalScrollBar().setValue(0))
-        self._resize_to_content()
+        self._request_resize_to_content()
 
     def _remove_live_fight_row(self) -> None:
         if self._live_fight_row is not None:
@@ -347,7 +362,7 @@ class CombatHistoryOverlay(OverlayWindow):
         # Rebuild session row
         self._rebuild_session_row()
         QTimer.singleShot(0, lambda: self._scroll.verticalScrollBar().setValue(0))
-        self._resize_to_content()
+        self._request_resize_to_content()
 
     def _on_live_fight_updated(self, fight: Fight) -> None:
         """Update footer and live fight row with current-fight stats."""
@@ -383,7 +398,7 @@ class CombatHistoryOverlay(OverlayWindow):
         self._rebuild_session_row()
         self._footer.update_stats(None, 1.0)
         self._selected_fight = None
-        self._resize_to_content()
+        self._request_resize_to_content()
 
     def _on_fight_selected(self, fight: Fight | None) -> None:
         """Called when a fight row is clicked; update footer for that fight."""
@@ -489,7 +504,7 @@ class CombatHistoryOverlay(OverlayWindow):
         for row in self._fight_rows:
             row.update_filter(hidden)
 
-        self._resize_to_content()
+        self._request_resize_to_content()
 
     def _rebuild_player_combo(self, session: CombatSession) -> None:
         """Rebuild the player selector combo with all players from the session."""
@@ -535,7 +550,7 @@ class CombatHistoryOverlay(OverlayWindow):
         if self._live_fight_row is not None:
             self._live_fight_row.set_my_name(self._display_player)
         self._rebuild_session_row()
-        self._resize_to_content()
+        self._request_resize_to_content()
 
     def _update_filter_players(self) -> None:
         """Sync the filter button's player list with the current session."""
@@ -554,7 +569,7 @@ class CombatHistoryOverlay(OverlayWindow):
         hidden = self._filter_btn.hidden_players
         for row in self._fight_rows:
             row.update_filter(hidden)
-        self._resize_to_content()
+        self._request_resize_to_content()
 
     def paintEvent(self, event):
         painter = QPainter(self)
