@@ -6,6 +6,13 @@ __pycache__/
 # C extensions
 *.so
 
+# VS Code
+*.code-workspace
+
+# TorMeter
+data/combatlogs
+# UserPreferences.json
+
 # Distribution / packaging
 .Python
 build/
@@ -31,6 +38,13 @@ MANIFEST
 #   before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+err_log.txt
 
 # Installer logs
 pip-log.txt

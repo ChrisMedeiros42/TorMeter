@@ -1,0 +1,41 @@
+"""Compatibility shim for the refactored combat log parsing package."""
+
+from app.parsing.logs import (
+    APPLY_EFFECT,
+    COMPANION,
+    DAMAGE,
+    ENTER_COMBAT,
+    EVENT,
+    EXIT_COMBAT,
+    HEAL,
+    NPC,
+    PLAYER,
+    REMOVE_EFFECT,
+    SPEND,
+    Entity,
+    LogEvent,
+    is_friendly_companion,
+    is_friendly_player,
+    parse_file,
+    parse_line,
+)
+
+__all__ = [
+    "PLAYER",
+    "COMPANION",
+    "NPC",
+    "APPLY_EFFECT",
+    "REMOVE_EFFECT",
+    "EVENT",
+    "SPEND",
+    "DAMAGE",
+    "HEAL",
+    "ENTER_COMBAT",
+    "EXIT_COMBAT",
+    "Entity",
+    "LogEvent",
+    "parse_line",
+    "parse_file",
+    "is_friendly_player",
+    "is_friendly_companion",
+]
