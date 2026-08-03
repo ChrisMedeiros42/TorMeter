@@ -23,4 +23,5 @@ WINDOW_NAMES = [
     "Heal",
     "Combat History",
     "Charts",
+    "Nihilus' Book of Grudges",
 ]

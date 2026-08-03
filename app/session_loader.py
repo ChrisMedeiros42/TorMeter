@@ -1,10 +1,11 @@
 # ◢▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◣
-# ▧ - Lunar Edge Games                                        ▧
-# ▧ - Tor Meter                                               ▧
+# ▧ - Lunar Edge Games                                          ▧
+# ▧ - Tor Meter                                                 ▧
 # ▧▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▧
-# ▧ - Module: Main                                            ▧
-# ▧ - Component: Session Loader                               ▧
+# ▧ - Module: App                                               ▧
+# ▧ - Sub-Module: Session Loader                                ▧
 # ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
+
 
 """
 session_loader.py — Discover and lazily parse previous SWTOR combat log files.

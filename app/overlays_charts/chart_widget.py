@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QRect
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
 from PyQt6.QtWidgets import QSizePolicy, QWidget
 
 from app.constants import fmt_num
@@ -179,13 +179,51 @@ class _ChartWidget(QWidget):
         val_font = QFont()
         val_font.setPointSize(max(self._val_pt - 1, 6))
 
+        def _sample_indices(length: int, target_count: int) -> list[int]:
+            if length <= 0:
+                return []
+            if target_count >= length:
+                return list(range(length))
+            if target_count <= 1:
+                return [0]
+            out: list[int] = []
+            seen: set[int] = set()
+            for k in range(target_count):
+                idx = int(round(k * (length - 1) / (target_count - 1)))
+                if idx not in seen:
+                    out.append(idx)
+                    seen.add(idx)
+            return out
+
         x_step = plot_w / max(n_fights - 1, 1)
         x_positions = [int(pad_l + i * x_step) for i in range(n_fights)]
 
+        # Choose Y tick density from available pixel height, capped at 10 labels.
+        y_metrics = QFontMetrics(val_font)
+        y_label_h = max(1, y_metrics.height())
+        y_ticks_by_space = int(plot_h / (y_label_h + 4)) + 1
+        y_tick_count = min(10, max(2, y_ticks_by_space))
+
+        # Choose X tick density from available pixel width and text width,
+        # capped at 10 labels and sampled evenly.
+        x_metrics = QFontMetrics(name_font)
+        max_x_label_w = max(
+            16,
+            max((x_metrics.horizontalAdvance(lbl) for lbl in self._line_labels), default=16)
+            + 10,
+        )
+        if n_fights <= 1:
+            x_tick_count = 1
+        else:
+            x_ticks_by_space = int(plot_w / max_x_label_w) + 1
+            x_tick_count = min(10, n_fights, max(2, x_ticks_by_space))
+        x_label_indices = _sample_indices(n_fights, x_tick_count)
+
         # Grid lines
         painter.setPen(QPen(QColor(255, 255, 255, 20), 1))
-        for i in range(5):
-            gy = int(pad_t + plot_h * i / 4)
+        y_den = max(y_tick_count - 1, 1)
+        for i in range(y_tick_count):
+            gy = int(pad_t + plot_h * i / y_den)
             painter.drawLine(pad_l, gy, pad_l + plot_w, gy)
 
         # Y axis
@@ -194,9 +232,10 @@ class _ChartWidget(QWidget):
 
         # Y axis labels
         painter.setFont(val_font)
-        for i in range(5):
-            val = max_val * (1.0 - i / 4)
-            gy = int(pad_t + plot_h * i / 4)
+        for i in range(y_tick_count):
+            ratio = i / y_den
+            val = max_val * (1.0 - ratio)
+            gy = int(pad_t + plot_h * ratio)
             painter.setPen(QColor(255, 255, 255, 120))
             label = fmt_num(val)
             painter.drawText(
@@ -207,10 +246,16 @@ class _ChartWidget(QWidget):
 
         # X axis fight labels
         painter.setFont(name_font)
-        for i, label in enumerate(self._line_labels):
+        for i in x_label_indices:
+            label = self._line_labels[i]
             painter.setPen(QColor(255, 255, 255, 100))
             painter.drawText(
-                QRect(x_positions[i] - 20, pad_t + plot_h + 4, 40, pad_b - 4),
+                QRect(
+                    x_positions[i] - max_x_label_w // 2,
+                    pad_t + plot_h + 4,
+                    max_x_label_w,
+                    pad_b - 4,
+                ),
                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
                 label,
             )
@@ -250,22 +295,82 @@ class _ChartWidget(QWidget):
             for x, y in points:
                 painter.drawEllipse(x - 4, y - 4, 8, 8)
 
-        # Inline legend (top-left of plot area)
+        # Inline legend (top-left of plot area): cap to 10 names and prevent overlap.
+        legend_limit = 10
+
+        def _latest_non_none(vals: list[float | None]) -> float:
+            for v in reversed(vals):
+                if v is not None:
+                    return float(v)
+            return -1.0
+
+        def _peak_non_none(vals: list[float | None]) -> float:
+            nums = [float(v) for v in vals if v is not None]
+            return max(nums) if nums else -1.0
+
+        legend_items = sorted(
+            self._line_data.items(),
+            key=lambda item: (
+                0 if item[1][0] else 1,  # me first
+                -_latest_non_none(item[1][1]),
+                -_peak_non_none(item[1][1]),
+                item[0].casefold(),
+            ),
+        )
+        visible_legend = legend_items[:legend_limit]
+        hidden_count = max(0, len(legend_items) - len(visible_legend))
+
+        # Build drawable legend rows: (label, is_me, color, draw_marker)
+        legend_rows: list[tuple[str, bool, QColor, bool]] = [
+            (pname, is_me, player_colors[pname], True)
+            for pname, (is_me, _vals) in visible_legend
+        ]
+        if hidden_count > 0:
+            legend_rows.append((f"+{hidden_count} more", False, QColor(170, 170, 170), False))
+
+        painter.setFont(name_font)
+        legend_metrics = QFontMetrics(name_font)
+        row_h = max(12, legend_metrics.height() + 2)
+        marker_w = 10
+
+        # Fit legend rows inside plot area using 1-2 columns to avoid label overlap.
         legend_x = pad_l + 6
         legend_y = pad_t + 2
-        painter.setFont(name_font)
-        for pname, (is_me, _vals) in self._line_data.items():
-            color = player_colors[pname]
-            painter.setBrush(color)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(legend_x, legend_y + 1, 6, 6)
+        avail_h = max(1, plot_h - 4)
+        max_rows_per_col = max(1, avail_h // row_h)
+        total_rows = len(legend_rows)
+        if total_rows <= max_rows_per_col:
+            col_count = 1
+        else:
+            col_count = 2
+        rows_per_col = max(1, (total_rows + col_count - 1) // col_count)
+        col_w = max(80, min(160, max(80, (plot_w - 12) // col_count)))
+        text_w = max(40, col_w - marker_w - 6)
+
+        for idx, (label, is_me, color, draw_marker) in enumerate(legend_rows):
+            col = idx // rows_per_col
+            row = idx % rows_per_col
+            x = legend_x + col * col_w
+            y = legend_y + row * row_h
+            if y + row_h > pad_t + plot_h:
+                continue
+
+            if draw_marker:
+                painter.setBrush(color)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawEllipse(x, y + max(1, (row_h - 6) // 2), 6, 6)
+
             painter.setPen(self._name_color_me if is_me else self._name_color_other)
-            painter.drawText(
-                QRect(legend_x + 10, legend_y, 100, 10),
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                pname[:14],
+            text = legend_metrics.elidedText(
+                label,
+                Qt.TextElideMode.ElideRight,
+                text_w,
             )
-            legend_y += 12
+            painter.drawText(
+                QRect(x + marker_w, y, text_w, row_h),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                text,
+            )
 
     def _paint_pie(self):
         """Pie chart with player name legend."""

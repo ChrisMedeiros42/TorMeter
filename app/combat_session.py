@@ -1,9 +1,9 @@
 # ◢▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◣
-# ▧ - Lunar Edge Games                                        ▧
-# ▧ - Tor Meter                                               ▧
+# ▧ - Lunar Edge Games                                          ▧
+# ▧ - Tor Meter                                                 ▧
 # ▧▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▧
-# ▧ - Module: Main                                            ▧
-# ▧ - Component: Combat Session                               ▧
+# ▧ - Module: App                                               ▧
+# ▧ - Sub-Module: Combat Session                                ▧
 # ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
 
 """combat_session.py — Fight segmentation and per-fight stat aggregation.

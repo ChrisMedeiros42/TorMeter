@@ -162,6 +162,19 @@ class TorMeterMenu(QWidget):
             self._rows[name] = row
             self._dropdown_layout.addWidget(row)
 
+        sep_grudges = QWidget()
+        sep_grudges.setFixedHeight(1)
+        sep_grudges.setStyleSheet("background: #555;")
+        self._dropdown_layout.addWidget(sep_grudges)
+
+        grudges_name = "Nihilus' Book of Grudges"
+        grudges_row = RowButton(grudges_name, active=True)
+        grudges_row.toggle.active = True
+        grudges_row.mousePressEvent = _make_toggle(grudges_name)
+        grudges_row.set_reset_callback(_make_reset(grudges_name))
+        self._rows[grudges_name] = grudges_row
+        self._dropdown_layout.addWidget(grudges_row)
+
         sep2 = QWidget()
         sep2.setFixedHeight(1)
         sep2.setStyleSheet("background: #555;")

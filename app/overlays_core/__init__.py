@@ -14,6 +14,7 @@ from .helpers import (
 from .master import OverlayMasterWindow
 from .player_list.rows import PlayerRow
 from .player_list.windows import DefenseWindow, DpsWindow, HealWindow, SummaryWindow
+from app.overlays_grudges import NihilusBookOfGrudgesOverlay
 
 __all__ = [
     "OverlayMasterWindow",
@@ -21,6 +22,7 @@ __all__ = [
     "DpsWindow",
     "DefenseWindow",
     "HealWindow",
+    "NihilusBookOfGrudgesOverlay",
     "PlayerRow",
     "_RotatedLabel",
     "_SectionFrame",

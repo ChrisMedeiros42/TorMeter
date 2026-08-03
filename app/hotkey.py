@@ -1,9 +1,9 @@
 # ◢▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◣
-# ▧ - Lunar Edge Games                                        ▧
-# ▧ - Tor Meter                                               ▧
+# ▧ - Lunar Edge Games                                          ▧
+# ▧ - Tor Meter                                                 ▧
 # ▧▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▧
-# ▧ - Module: Main                                            ▧
-# ▧ - Component: Hotkey                                       ▧
+# ▧ - Module: App                                               ▧
+# ▧ - Sub-Module: Hotkey                                        ▧
 # ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
 
 import ctypes
@@ -24,8 +24,10 @@ class HotkeyFilter(QAbstractNativeEventFilter):
 
     def __init__(self, callback_or_map, hotkey_id: int = HOTKEY_ID):
         super().__init__()
+
         if isinstance(callback_or_map, dict):
             self._map: dict[int, object] = callback_or_map
+            
         else:
             self._map = {hotkey_id: callback_or_map}
 

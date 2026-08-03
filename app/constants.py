@@ -1,9 +1,9 @@
 # ◢▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◣
-# ▧ - Lunar Edge Games                                        ▧
-# ▧ - Tor Meter                                               ▧
+# ▧ - Lunar Edge Games                                          ▧
+# ▧ - Tor Meter                                                 ▧
 # ▧▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▧
-# ▧ - Module: Main                                            ▧
-# ▧ - Component: Constants                                    ▧
+# ▧ - Module: App                                               ▧
+# ▧ - Sub-Module: Constants                                     ▧
 # ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
 
 # Windows API constants
@@ -32,13 +32,18 @@ def fmt_num(value: float) -> str:
     < 1,000,000,000,000 → e.g. 3.4B
     otherwise  → e.g. 1.2T
     """
+    
     v = abs(value)
     if v < 100_000:
         return f"{value:,.0f}"
+    
     if v < 1_000_000:
         return f"{value / 1_000:.1f}K"
+    
     if v < 1_000_000_000:
         return f"{value / 1_000_000:.1f}M"
+    
     if v < 1_000_000_000_000:
         return f"{value / 1_000_000_000:.1f}B"
+    
     return f"{value / 1_000_000_000_000:.1f}T"

@@ -1,3 +1,12 @@
+# ◢▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◣
+# ▧ - Lunar Edge Games                                          ▧
+# ▧ - Tor Meter                                                 ▧
+# ▧▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▧
+# ▧ - Module: Overlays Core                                     ▧
+# ▧ - Sub-Module: Overlay Master                                ▧
+# ▧ - Component: Window                                         ▧
+# ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
+
 """Overlay master window implementation."""
 
 from __future__ import annotations
@@ -2783,6 +2792,118 @@ class OverlayMasterWindow(OverlayWindow):
             "CHT", "#2A1A3A", _cht_wrapped, on_collapse_change=self._resize_to_content,
         )
 
+        # ── Nihilus' Book of Grudges section ─────────────────────────────────
+        nbg_inner, nbg_grid = _make_section_inner()
+        _add_grid_row(
+            nbg_grid,
+            0,
+            False,
+            "Window Width",
+            p.nbg_win_width if p else 360,
+            init_show=True,
+            init_color=None,
+            has_size=True,
+            has_color=False,
+            value_range=(220, 1000),
+            on_value_change=(
+                (
+                    lambda v: (
+                        setattr(p, "nbg_win_width", v),
+                        p.save(),
+                        self._notify("NBG", "apply_win_width", v),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
+        _add_grid_row(
+            nbg_grid,
+            1,
+            False,
+            "Window Height",
+            p.nbg_win_height if p else 300,
+            init_show=True,
+            init_color=None,
+            has_size=True,
+            has_color=False,
+            value_range=(120, 1200),
+            on_value_change=(
+                (
+                    lambda v: (
+                        setattr(p, "nbg_win_height", v),
+                        p.save(),
+                        self._notify("NBG", "apply_win_height", v),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
+        _add_grid_row(
+            nbg_grid,
+            2,
+            False,
+            "Window BG",
+            p.nbg_win_bg_alpha if p else 0,
+            init_color=p.nbg_win_bg_color if p else "#000000",
+            value_range=(0, 255),
+            on_value_change=(
+                (
+                    lambda v: (
+                        setattr(p, "nbg_win_bg_alpha", v),
+                        p.save(),
+                        self._notify("NBG", "apply_win_bg_alpha", v),
+                    )
+                )
+                if p
+                else None
+            ),
+            on_color_change=(
+                (
+                    lambda c: (
+                        setattr(p, "nbg_win_bg_color", c),
+                        p.save(),
+                        self._notify("NBG", "apply_win_bg_color", c),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
+        _add_grid_row(
+            nbg_grid,
+            3,
+            False,
+            "Text Size",
+            p.nbg_label_size if p else 10,
+            init_show=True,
+            init_color=None,
+            has_size=True,
+            has_color=False,
+            value_range=(6, 24),
+            on_value_change=(
+                (
+                    lambda v: (
+                        setattr(p, "nbg_label_size", v),
+                        p.save(),
+                        self._notify("NBG", "apply_text_size", v),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
+        _nbg_wrapped, _nbg_cb = _make_show_hide_wrapper(
+            nbg_inner,
+            init_visible=self._vis_obs_dict.get("Nihilus' Book of Grudges", ObservableValue(p.get("Nihilus' Book of Grudges").visible if p else True)).value,
+            on_change=_make_on_change("NBG", "Nihilus' Book of Grudges"),
+        )
+        self._vis_checks["NBG"] = _nbg_cb
+        _nbg_sec = _section(
+            "NBG", "#5A2E18", _nbg_wrapped, on_collapse_change=self._resize_to_content,
+        )
+
         # ── Store width/height slider refs for drag-resize → OM sync ───────────
         for _k, _g, _wr, _hr in (
             ("SUM", sum_grid, 1, None),
@@ -2791,6 +2912,7 @@ class OverlayMasterWindow(OverlayWindow):
             ("HEAL", heal_grid, 1, None),
             ("COH", coh_grid, 0, 1),
             ("CHT", cht_grid, 0, 1),
+            ("NBG", nbg_grid, 0, 1),
         ):
             _sl: dict = {}
             _wi = _g.itemAtPosition(_wr, 2)
@@ -2810,7 +2932,7 @@ class OverlayMasterWindow(OverlayWindow):
         sec_layout.setContentsMargins(0, 0, 0, 0)
         sec_layout.setSpacing(4)
         sec_layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
-        for sec in (_sum_sec, _dps_sec, _def_sec, _heal_sec, _coh_sec, _cht_sec):
+        for sec in (_sum_sec, _dps_sec, _def_sec, _heal_sec, _coh_sec, _cht_sec, _nbg_sec):
             sec_layout.addWidget(sec)
 
         self._sections_container = sections_container
@@ -2943,6 +3065,7 @@ class OverlayMasterWindow(OverlayWindow):
         heal_win: "_PlayerListOverlay",
         coh_win=None,
         cht_win=None,
+        nbg_win=None,
         vis_obs: "dict[str, ObservableValue] | None" = None,
     ) -> None:
         """Wire Overlay Master controls to the live stat overlay windows."""
@@ -2954,6 +3077,8 @@ class OverlayMasterWindow(OverlayWindow):
             self._linked["COH"] = coh_win
         if cht_win is not None:
             self._linked["CHT"] = cht_win
+        if nbg_win is not None:
+            self._linked["NBG"] = nbg_win
 
         # If vis_obs provided at link time (wasn't available at construction), store it
         if vis_obs is not None:
@@ -2964,6 +3089,7 @@ class OverlayMasterWindow(OverlayWindow):
         _key_to_win_name = {
             "SUM": "Summary", "DPS": "DPS", "DEF": "Defense",
             "HEAL": "Heal", "COH": "Combat History", "CHT": "Charts",
+            "NBG": "Nihilus' Book of Grudges",
         }
 
         def _make_sync_cb(checkbox):

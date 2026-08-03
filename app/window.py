@@ -1,10 +1,11 @@
 # ◢▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◣
-# ▧ - Lunar Edge Games                                        ▧
-# ▧ - Tor Meter                                               ▧
+# ▧ - Lunar Edge Games                                          ▧
+# ▧ - Tor Meter                                                 ▧
 # ▧▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▧
-# ▧ - Module: Main                                            ▧
-# ▧ - Component: Window                                       ▧
+# ▧ - Module: App                                               ▧
+# ▧ - Sub-Module: Window                                        ▧
 # ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
+
 
 import ctypes
 
@@ -48,6 +49,7 @@ class OverlayWindow(QWidget):
         self._manual_window_size: QSize | None = None
         self._vis_obs: ObservableValue | None = None
         self._manual_resize_callback = None  # set by OverlayMasterWindow to sync sliders
+        self._initial_visible: bool = True
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -99,7 +101,13 @@ class OverlayWindow(QWidget):
         self._size_grip.raise_()
         self._sync_layout_geometry()
 
-        self.show()
+        if self._prefs is not None:
+            try:
+                self._initial_visible = bool(self._prefs.get(self.window_name).visible)
+            except Exception:
+                self._initial_visible = True
+
+        self.setVisible(self._initial_visible)
         self._hwnd = int(self.winId())
         self._set_click_through(True)
 
@@ -137,13 +145,15 @@ class OverlayWindow(QWidget):
         show/hide events back into *obs* so all subscribers stay in sync.
         """
         self._vis_obs = obs
+
+        def _apply_visible(visible: bool) -> None:
+            if self.isVisible() != visible:
+                self.setVisible(visible)
+
         # Drive window from observable
-        obs.subscribe(lambda visible: self.show() if visible else self.hide())
+        obs.subscribe(_apply_visible)
         # Sync to observable's current value immediately
-        if obs.value:
-            self.show()
-        else:
-            self.hide()
+        _apply_visible(bool(obs.value))
 
     def detach_visible(self) -> None:
         """

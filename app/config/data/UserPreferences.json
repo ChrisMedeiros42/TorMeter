@@ -1,7 +1,7 @@
 {
   "enable_hotkey": "Ctrl+Shift+F7",
   "overlay_master": {
-    "character_name": "",
+    "character_name": "Tainted Juicie",
     "log_folder": "",
     "sum_name_size": 12,
     "sum_dps_size": 12,
@@ -37,16 +37,16 @@
     "dps_name_col_color": "transparent",
     "dps_win_bg_alpha": 42,
     "dps_win_bg_color": "#000000",
-    "def_win_width": 338,
+    "def_win_width": 406,
     "def_name_col_color": "transparent",
     "def_win_bg_alpha": 49,
     "def_win_bg_color": "#000000",
-    "heal_win_width": 341,
+    "heal_win_width": 406,
     "heal_name_col_color": "transparent",
     "heal_win_bg_alpha": 36,
     "heal_win_bg_color": "#000000",
     "sum_avg_show": true,
-    "sum_total_show": true,
+    "sum_total_show": false,
     "sum_bar_border_show": true,
     "sum_bar_border_size": 1,
     "sum_bar_border_color": "#FFFFFF",
@@ -135,18 +135,18 @@
     "om_win_bg_alpha": 199,
     "om_win_bg_color": "#14141E",
     "om_show_watcher_debug": false,
-    "coh_win_width": 296,
-    "coh_win_height": 393,
+    "coh_win_width": 387,
+    "coh_win_height": 317,
     "coh_win_bg_alpha": 190,
     "coh_win_bg_color": "#000000",
     "coh_name_size": 12,
     "coh_name_color": "#FFFFFF",
     "coh_stat_size": 13,
-    "coh_list_height": 503,
+    "coh_list_height": 520,
     "coh_label_size": 10,
     "coh_footer_value_size": 12,
-    "cht_win_width": 420,
-    "cht_win_height": 856,
+    "cht_win_width": 440,
+    "cht_win_height": 243,
     "cht_win_bg_alpha": 118,
     "cht_win_bg_color": "#000000",
     "cht_name_size": 10,
@@ -155,7 +155,29 @@
     "cht_other_color": "#787878",
     "cht_val_size": 10,
     "cht_label_size": 10,
-    "cht_footer_value_size": 12
+    "cht_footer_value_size": 12,
+    "nbg_win_width": 1000,
+    "nbg_win_height": 323,
+    "nbg_win_bg_alpha": 200,
+    "nbg_win_bg_color": "#000000",
+    "nbg_label_size": 13,
+    "nbg_sort_mode": "Kills",
+    "nbg_search_text": "",
+    "nbg_columns_visible": {
+      "enemy": true,
+      "encounters": true,
+      "kills": true,
+      "deaths": true,
+      "avg_ttk": true,
+      "fastest_ttk": true,
+      "damage_out": true,
+      "damage_in": true,
+      "avg_out": true,
+      "avg_in": true,
+      "kill_rate": true,
+      "crit_rate": true,
+      "last_seen": true
+    }
   },
   "windows": {
     "Default Overlay": {
@@ -168,61 +190,16 @@
       "visible": false
     },
     "Overlay Master": {
-      "x": 487,
-      "y": 134,
+      "x": 1346,
+      "y": -1,
       "default_x": 100,
       "default_y": 100,
       "expand": "down",
       "anchor": "top-left",
-      "visible": false
+      "visible": true
     },
     "TorMeter Menu": {
-      "x": 2592,
-      "y": 3,
-      "default_x": 100,
-      "default_y": 100,
-      "expand": "down",
-      "anchor": "top-left",
-      "visible": true
-    },
-    "Summary": {
-      "x": 0,
-      "y": 1613,
-      "default_x": 100,
-      "default_y": 100,
-      "expand": "down",
-      "anchor": "top-left",
-      "visible": true
-    },
-    "DPS": {
-      "x": 5,
-      "y": 819,
-      "default_x": 100,
-      "default_y": 100,
-      "expand": "down",
-      "anchor": "top-left",
-      "visible": false
-    },
-    "Defense": {
-      "x": 1690,
-      "y": 877,
-      "default_x": 100,
-      "default_y": 100,
-      "expand": "down",
-      "anchor": "top-left",
-      "visible": false
-    },
-    "Heal": {
-      "x": 1695,
-      "y": 1099,
-      "default_x": 100,
-      "default_y": 100,
-      "expand": "down",
-      "anchor": "top-left",
-      "visible": false
-    },
-    "Combat History": {
-      "x": 2213,
+      "x": 1660,
       "y": 1,
       "default_x": 100,
       "default_y": 100,
@@ -230,9 +207,63 @@
       "anchor": "top-left",
       "visible": true
     },
+    "Summary": {
+      "x": -3,
+      "y": 1075,
+      "default_x": 100,
+      "default_y": 100,
+      "expand": "down",
+      "anchor": "top-left",
+      "visible": true
+    },
+    "DPS": {
+      "x": 1628,
+      "y": 1132,
+      "default_x": 100,
+      "default_y": 100,
+      "expand": "down",
+      "anchor": "top-left",
+      "visible": false
+    },
+    "Defense": {
+      "x": 1628,
+      "y": 1132,
+      "default_x": 100,
+      "default_y": 100,
+      "expand": "down",
+      "anchor": "top-left",
+      "visible": false
+    },
+    "Heal": {
+      "x": 1628,
+      "y": 1133,
+      "default_x": 100,
+      "default_y": 100,
+      "expand": "down",
+      "anchor": "top-left",
+      "visible": false
+    },
+    "Combat History": {
+      "x": 1262,
+      "y": -1,
+      "default_x": 100,
+      "default_y": 100,
+      "expand": "down",
+      "anchor": "top-left",
+      "visible": false
+    },
     "Charts": {
       "x": -2,
       "y": 230,
+      "default_x": 100,
+      "default_y": 100,
+      "expand": "down",
+      "anchor": "top-left",
+      "visible": false
+    },
+    "Nihilus' Book of Grudges": {
+      "x": 50,
+      "y": 50,
       "default_x": 100,
       "default_y": 100,
       "expand": "down",

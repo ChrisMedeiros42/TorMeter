@@ -1,3 +1,12 @@
+# ◢▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◣
+# ▧ - Lunar Edge Games                                          ▧
+# ▧ - Tor Meter                                                 ▧
+# ▧▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▧
+# ▧ - Module: App                                               ▧
+# ▧ - Sub-Module: Overlays                                      ▧
+# ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
+
+
 """Compatibility shim for refactored overlay modules."""
 
 from app.overlays_core import (
@@ -5,6 +14,7 @@ from app.overlays_core import (
     DpsWindow,
     HealWindow,
     OverlayMasterWindow,
+    NihilusBookOfGrudgesOverlay,
     PlayerRow,
     SummaryWindow,
     _AutoScrollArea,
@@ -25,6 +35,7 @@ __all__ = [
     "DpsWindow",
     "DefenseWindow",
     "HealWindow",
+    "NihilusBookOfGrudgesOverlay",
     "PlayerRow",
     "_RotatedLabel",
     "_SectionFrame",

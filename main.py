@@ -9,12 +9,14 @@
 # ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
 
 import sys
+from pathlib import Path
 
 from PyQt6.QtWidgets import QApplication
 
 from app.charts_overlay import ChartsOverlay
 from app.combat_history_overlay import CombatHistoryOverlay
 from app.constants import DEBUG
+from app.grudges_overlay import NihilusBookOfGrudgesOverlay
 from app.log_watcher import LogWatcher
 from app.menu import TorMeterMenu
 from app.observable import ObservableValue
@@ -37,7 +39,7 @@ def main():
     # ── Observable visibility state — single source of truth ────────────────
     _vis_names = [
         "Overlay Master", "Summary", "DPS", "Defense",
-        "Heal", "Combat History", "Charts",
+        "Heal", "Combat History", "Charts", "Nihilus' Book of Grudges",
     ]
     vis_obs: dict[str, ObservableValue] = {
         name: ObservableValue(prefs.get(name).visible)
@@ -54,6 +56,7 @@ def main():
         "Heal": HealWindow(prefs),
         "Combat History": CombatHistoryOverlay(prefs),
         "Charts": ChartsOverlay(prefs),
+        "Nihilus' Book of Grudges": NihilusBookOfGrudgesOverlay(prefs),
     }
 
     if DEBUG:
@@ -71,6 +74,7 @@ def main():
         windows["Heal"],
         windows["Combat History"],
         windows["Charts"],
+        windows["Nihilus' Book of Grudges"],
         vis_obs=vis_obs,
     )
 
@@ -84,6 +88,7 @@ def main():
         "Heal",
         "Combat History",
         "Charts",
+        "Nihilus' Book of Grudges",
     ):
         win = windows[name]
         if hasattr(win, "receive_watcher"):
@@ -104,7 +109,6 @@ def main():
 
     # Apply saved log folder if the user has set one explicitly
     if prefs.log_folder:
-        from pathlib import Path
 
         watcher.set_log_dir(Path(prefs.log_folder))
     else:

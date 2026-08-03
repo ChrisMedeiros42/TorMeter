@@ -190,6 +190,15 @@ class Preferences:
         self.cht_val_size: int = 10
         self.cht_label_size: int = 10
         self.cht_footer_value_size: int = 9
+        # ── Nihilus' Book of Grudges overlay settings ─────────────────────────
+        self.nbg_win_width: int = 360
+        self.nbg_win_height: int = 300
+        self.nbg_win_bg_alpha: int = 0
+        self.nbg_win_bg_color: str = "#000000"
+        self.nbg_label_size: int = 10
+        self.nbg_sort_mode: str = "Kills"
+        self.nbg_search_text: str = ""
+        self.nbg_columns_visible: dict[str, bool] = {}
         self._load()
 
     def _load(self):
@@ -354,6 +363,20 @@ class Preferences:
             self.cht_val_size = om.get("cht_val_size", 10)
             self.cht_label_size = om.get("cht_label_size", 10)
             self.cht_footer_value_size = om.get("cht_footer_value_size", 9)
+            self.nbg_win_width = om.get("nbg_win_width", 360)
+            self.nbg_win_height = om.get("nbg_win_height", 300)
+            self.nbg_win_bg_alpha = om.get("nbg_win_bg_alpha", 0)
+            self.nbg_win_bg_color = om.get("nbg_win_bg_color", "#000000")
+            self.nbg_label_size = om.get("nbg_label_size", 10)
+            self.nbg_sort_mode = om.get("nbg_sort_mode", "Kills")
+            self.nbg_search_text = om.get("nbg_search_text", "")
+            raw_nbg_cols = om.get("nbg_columns_visible", {})
+            if isinstance(raw_nbg_cols, dict):
+                self.nbg_columns_visible = {
+                    str(k): bool(v) for k, v in raw_nbg_cols.items()
+                }
+            else:
+                self.nbg_columns_visible = {}
         else:
             windows = {}
 
@@ -551,6 +574,14 @@ class Preferences:
                 "cht_val_size": self.cht_val_size,
                 "cht_label_size": self.cht_label_size,
                 "cht_footer_value_size": self.cht_footer_value_size,
+                "nbg_win_width": self.nbg_win_width,
+                "nbg_win_height": self.nbg_win_height,
+                "nbg_win_bg_alpha": self.nbg_win_bg_alpha,
+                "nbg_win_bg_color": self.nbg_win_bg_color,
+                "nbg_label_size": self.nbg_label_size,
+                "nbg_sort_mode": self.nbg_sort_mode,
+                "nbg_search_text": self.nbg_search_text,
+                "nbg_columns_visible": self.nbg_columns_visible,
             },
             "windows": {name: asdict(prefs) for name, prefs in self._data.items()},
         }

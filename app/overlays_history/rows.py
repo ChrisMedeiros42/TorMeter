@@ -13,6 +13,11 @@ from app.overlays_shared.player_match import player_stats_matches
 
 from .constants import _FIGHT_BG, _HEADER_STYLE, _LABEL_STYLE, _MAX_LIST_H
 
+
+def _set_visible_if_changed(widget: QWidget, visible: bool) -> None:
+    if widget.isVisible() != visible:
+        widget.setVisible(visible)
+
 class _StatCell(QLabel):
     def __init__(self, text: str = "—", color: str = "white"):
         super().__init__(text)
@@ -252,7 +257,7 @@ class _PlayerDetailRow(QWidget):
 
     def _toggle(self) -> None:
         self._expanded = not self._expanded
-        self._detail.setVisible(self._expanded)
+        _set_visible_if_changed(self._detail, self._expanded)
         self._arrow.setText("▼" if self._expanded else "▶")
 
     def mousePressEvent(self, event):
@@ -290,6 +295,7 @@ class _FightRow(QWidget):
         self._expanded = False
         self._name_pt: int | None = None  # remembered for _rebuild_detail
         self._stat_pt: int | None = None
+        self._summary_is_fallback = False
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -315,11 +321,20 @@ class _FightRow(QWidget):
         self._name_lbl.setStyleSheet(_HEADER_STYLE)
         hdr_l.addWidget(self._name_lbl, 1)
 
+        self._fallback_lbl = QLabel("fallback")
+        self._fallback_lbl.setStyleSheet(
+            "color: rgba(255, 215, 0, 190); font-size: 7px; background: transparent;"
+        )
+        self._fallback_lbl.setVisible(False)
+        hdr_l.addWidget(self._fallback_lbl)
+
         self._summary_stat_cells: list[_StatCell] = []
-        for val, color in self._summary_vals():
-            cell = _StatCell(val, color)
+        for _ in range(4):
+            cell = _StatCell("—", "white")
             self._summary_stat_cells.append(cell)
             hdr_l.addWidget(cell)
+
+        self._refresh_summary_cells()
 
         self._outer.addWidget(hdr)
 
@@ -335,8 +350,10 @@ class _FightRow(QWidget):
         self._outer.addWidget(self._detail)
 
     def _summary_vals(self):
-        """Return [(text, color), ...] for the fight summary columns."""
+        """Return ([(text, color), ...], used_fallback) for summary columns."""
         dur = self._fight.duration_s
+        used_fallback = False
+
         # Use the selected local player when provided.
         if self._my_name:
             stats = next(
@@ -349,17 +366,34 @@ class _FightRow(QWidget):
             )
         else:
             stats = None
-        # Only fall back when no local player is selected (historical browsing).
-        if stats is None and not self._my_name and self._fight.player_stats:
-            stats = next(iter(self._fight.player_stats.values()))
+
+        # If the selected player is absent in this fight, fall back to the
+        # best available DPS contributor so summary columns remain meaningful.
+        if stats is None and self._fight.player_stats:
+            stats = max(
+                self._fight.player_stats.values(),
+                key=lambda s: s.damage_out,
+                default=None,
+            )
+            used_fallback = self._my_name is not None
+
         if stats:
             return [
                 (fmt_num(stats.dps(dur)), "#FF8C00"),
                 (fmt_num(stats.dtps(dur)), "#4169E1"),
                 (fmt_num(stats.hps(dur)), "#32CD32"),
                 (f"{stats.crit_rate:.0%}", "#FFD700"),
-            ]
-        return [("—", "white")] * 4
+            ], used_fallback
+        return [("—", "white")] * 4, False
+
+    def _refresh_summary_cells(self) -> None:
+        vals, used_fallback = self._summary_vals()
+        self._summary_is_fallback = used_fallback
+        _set_visible_if_changed(self._fallback_lbl, used_fallback)
+        for cell, (text, color) in zip(self._summary_stat_cells, vals):
+            cell.setText(text)
+            cell._color = color
+            cell._apply_style()
 
     def _populate_detail(self, layout: QVBoxLayout) -> None:
         dur = self._fight.duration_s
@@ -377,15 +411,13 @@ class _FightRow(QWidget):
         """Refresh summary stats from an in-progress fight (called on fight_updated)."""
         self._fight = fight
         self._name_lbl.setText(f"Fight {fight.index}  {fight.duration_s:.0f}s  ◉")
-        for cell, (text, _color) in zip(self._summary_stat_cells, self._summary_vals()):
-            cell.setText(text)
+        self._refresh_summary_cells()
         if self._expanded:
             self._rebuild_detail()
 
     def set_my_name(self, my_name: str | None) -> None:
         self._my_name = my_name
-        for cell, (text, _color) in zip(self._summary_stat_cells, self._summary_vals()):
-            cell.setText(text)
+        self._refresh_summary_cells()
         self._rebuild_detail()
 
     def _rebuild_detail(self) -> None:
@@ -411,6 +443,9 @@ class _FightRow(QWidget):
         self._name_lbl.setStyleSheet(
             f"color: white; font-size: {pt}px; font-weight: bold; background: transparent;"
         )
+        self._fallback_lbl.setStyleSheet(
+            f"color: rgba(255, 215, 0, 190); font-size: {max(7, pt - 2)}px; background: transparent;"
+        )
         for row in self._detail_rows:
             row.set_name_size(pt)
 
@@ -425,7 +460,7 @@ class _FightRow(QWidget):
         """Programmatically expand this row."""
         if not self._expanded:
             self._expanded = True
-            self._detail.setVisible(True)
+            _set_visible_if_changed(self._detail, True)
             self._arrow.setText("▼")
             if self._on_select:
                 self._on_select(self._fight)
@@ -434,7 +469,7 @@ class _FightRow(QWidget):
         """Programmatically collapse this row."""
         if self._expanded:
             self._expanded = False
-            self._detail.setVisible(False)
+            _set_visible_if_changed(self._detail, False)
             self._arrow.setText("▶")
             if notify and self._on_select:
                 self._on_select(None)
@@ -442,7 +477,7 @@ class _FightRow(QWidget):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._expanded = not self._expanded
-            self._detail.setVisible(self._expanded)
+            _set_visible_if_changed(self._detail, self._expanded)
             self._arrow.setText("▼" if self._expanded else "▶")
             if self._on_select:
                 self._on_select(self._fight if self._expanded else None)
@@ -457,7 +492,10 @@ class _FightRow(QWidget):
                 continue
             w = item.widget()
             if isinstance(w, _PlayerDetailRow):
-                w.setVisible(getattr(w, "_player_name", None) not in hidden)
+                _set_visible_if_changed(
+                    w,
+                    getattr(w, "_player_name", None) not in hidden,
+                )
         self.updateGeometry()
 
     def paintEvent(self, event):
@@ -468,7 +506,6 @@ class _FightRow(QWidget):
         p.drawRoundedRect(self.rect().adjusted(2, 1, -2, -1), 3, 3)
         super().paintEvent(event)
 
-
 class _SessionRow(QWidget):
     """Top row showing aggregate stats across all fights."""
 
@@ -477,6 +514,8 @@ class _SessionRow(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(22)
         self._name_lbl: QLabel | None = None
+        self._fallback_lbl: QLabel | None = None
+        self._name_pt: int | None = None
         self._stat_cells: list[_StatCell] = []
         self._build(session, my_name)
 
@@ -498,24 +537,36 @@ class _SessionRow(QWidget):
         self._name_lbl.setStyleSheet(_HEADER_STYLE)
         layout.addWidget(self._name_lbl, 1)
 
+        self._fallback_lbl = QLabel("fallback")
+        self._fallback_lbl.setStyleSheet(
+            "color: rgba(255, 215, 0, 190); font-size: 7px; background: transparent;"
+        )
+        self._fallback_lbl.setVisible(False)
+        layout.addWidget(self._fallback_lbl)
+
         total_dur = sum(f.duration_s for f in session.fights)
+        selected_aid: str | None = None
         if my_name:
-            agg = session.aggregate_player_stats(
-                next(
-                    (
-                        aid
-                        for f in session.fights
-                        for aid, s in f.player_stats.items()
-                        if player_stats_matches(my_name, s)
-                    ),
-                    "",
-                )
+            selected_aid = next(
+                (
+                    aid
+                    for f in session.fights
+                    for aid, s in f.player_stats.items()
+                    if player_stats_matches(my_name, s)
+                ),
+                None,
+            )
+            agg = (
+                session.aggregate_player_stats(selected_aid)
+                if selected_aid
+                else None
             )
         else:
             agg = None
 
-        # Only fall back when no local player is selected (historical browsing).
-        if agg is None and not my_name and session.fights:
+        used_fallback = False
+        # Fall back when no selected-player aggregate exists.
+        if agg is None and session.fights:
             all_aids = {aid for f in session.fights for aid in f.player_stats}
             best_aid = max(
                 all_aids,
@@ -527,7 +578,17 @@ class _SessionRow(QWidget):
                 default=None,
             )
             if best_aid:
+                selected_aid = best_aid
                 agg = session.aggregate_player_stats(best_aid)
+                used_fallback = my_name is not None
+
+        # Use the selected/fallback player's active-fight duration for averages.
+        if selected_aid:
+            total_dur = sum(
+                f.duration_s for f in session.fights if selected_aid in f.player_stats
+            )
+
+        _set_visible_if_changed(self._fallback_lbl, used_fallback)
 
         if agg and total_dur > 0:
             for val, color in (
@@ -545,10 +606,18 @@ class _SessionRow(QWidget):
                 self._stat_cells.append(cell)
                 layout.addWidget(cell)
 
+        if self._name_pt is not None:
+            self.set_name_size(self._name_pt)
+
     def set_name_size(self, pt: int) -> None:
+        self._name_pt = pt
         if self._name_lbl:
             self._name_lbl.setStyleSheet(
                 f"color: white; font-size: {pt}px; font-weight: bold; background: transparent;"
+            )
+        if self._fallback_lbl:
+            self._fallback_lbl.setStyleSheet(
+                f"color: rgba(255, 215, 0, 190); font-size: {max(7, pt - 2)}px; background: transparent;"
             )
 
     def set_stat_size(self, pt: int) -> None:

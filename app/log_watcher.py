@@ -1,3 +1,11 @@
+# ◢▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◣
+# ▧ - Lunar Edge Games                                          ▧
+# ▧ - Tor Meter                                                 ▧
+# ▧▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▣▧
+# ▧ - Module: App                                               ▧
+# ▧ - Sub-Module: Log Watcher                                   ▧
+# ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
+
 """log_watcher.py — Tail the latest SWTOR combat log and drive live session state.
 
 Watches the combatlogs directory for the newest .txt file.  Every poll tick
@@ -496,6 +504,17 @@ class LogWatcher(QObject):
                 ev.effect_type == EVENT
                 and ev.effect_name in (ENTER_COMBAT, EXIT_COMBAT)
                 and is_friendly_player(ev.source)
+            ):
+                return True
+            if (
+                ev.effect_type == EVENT
+                and ev.effect_name == "Death"
+                and (
+                    is_friendly_player(ev.source)
+                    or is_friendly_player(ev.target)
+                    or is_friendly_companion(ev.source)
+                    or is_friendly_companion(ev.target)
+                )
             ):
                 return True
             if (
