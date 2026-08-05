@@ -130,7 +130,7 @@ class _PlayerDetailRow(QWidget):
             return "Damage"
         return "Total"
 
-    def __init__(self, fight: Fight, stats: PlayerFightStats, is_me: bool = False):
+    def __init__(self, fight: Fight, stats: PlayerFightStats, is_me: bool = False, me_bg_color: str = "#1E90FF33"):
         super().__init__()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -139,6 +139,7 @@ class _PlayerDetailRow(QWidget):
         self._fight = fight
         self._account_id = stats.account_id
         self._expanded = False
+        self._me_bg_qcolor = QColor(me_bg_color)
 
         self._outer = QVBoxLayout(self)
         self._outer.setContentsMargins(14, 0, 4, 0)  # match fight row indent
@@ -252,6 +253,10 @@ class _PlayerDetailRow(QWidget):
     def set_stat_size(self, pt: int) -> None:
         for cell in self._stat_cells:
             cell.set_font_size(pt)
+
+    def set_me_bg_color(self, c: str) -> None:
+        self._me_bg_qcolor = QColor(c)
+        self.update()
         for row in self._ability_rows:
             row.set_stat_size(pt)
 
@@ -272,7 +277,7 @@ class _PlayerDetailRow(QWidget):
         if self._is_me:
             p = QPainter(self)
             p.setRenderHint(QPainter.RenderHint.Antialiasing)
-            p.setBrush(QColor(30, 144, 255, 30))
+            p.setBrush(self._me_bg_qcolor)
             p.setPen(Qt.PenStyle.NoPen)
             p.drawRoundedRect(self.rect().adjusted(1, 0, -1, 0), 2, 2)
         super().paintEvent(event)
@@ -286,6 +291,7 @@ class _FightRow(QWidget):
         fight: Fight,
         my_name: str | None,
         on_select=None,
+        me_bg_color: str = "#1E90FF33",
         parent=None,
     ):
         super().__init__(parent)
@@ -293,6 +299,7 @@ class _FightRow(QWidget):
         self._my_name = my_name
         self._on_select = on_select
         self._expanded = False
+        self._me_bg_color = me_bg_color
         self._name_pt: int | None = None  # remembered for _rebuild_detail
         self._stat_pt: int | None = None
         self._summary_is_fallback = False
@@ -403,7 +410,7 @@ class _FightRow(QWidget):
             reverse=True,
         ):
             is_me = stats.name == self._my_name
-            row = _PlayerDetailRow(self._fight, stats, is_me=is_me)
+            row = _PlayerDetailRow(self._fight, stats, is_me=is_me, me_bg_color=self._me_bg_color)
             self._detail_rows.append(row)
             layout.addWidget(row)
 

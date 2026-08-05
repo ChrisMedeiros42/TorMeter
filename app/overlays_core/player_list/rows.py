@@ -11,7 +11,7 @@ from app.constants import fmt_num
 from ..helpers import _OutlineLabel
 from .bars import _StatBar, _TriStatBar
 
-_ME_BG = QColor(30, 144, 255, 51)  # 20% transparent blue
+_DEFAULT_ME_BG = QColor(30, 144, 255, 51)  # 20% transparent blue
 
 class PlayerRow(QWidget):
     """Single player stat entry: name | stat bar | score."""
@@ -37,6 +37,7 @@ class PlayerRow(QWidget):
         border_size: int = 1,
         border_color: str = "#FFFFFF",
         bar_color: str = "#1E90FF",
+        me_bg_color: str = "#1E90FF33",
         bar_bg_show: bool = True,
         bar_bg_size: int = 12,
         bar_bg_color: str = "#FFFFFF",
@@ -58,6 +59,7 @@ class PlayerRow(QWidget):
         self._outline_show = outline_show
         self._outline_size = outline_size
         self._outline_qcolor = QColor(outline_color)
+        self._me_bg_qcolor = QColor(me_bg_color) if me_bg_color else _DEFAULT_ME_BG
         self.setFixedHeight(row_height)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
@@ -137,6 +139,10 @@ class PlayerRow(QWidget):
 
     def set_is_me(self, is_me: bool) -> None:
         self._is_me = is_me
+        self.update()
+
+    def set_me_bg_color(self, c: str) -> None:
+        self._me_bg_qcolor = QColor(c) if c else _DEFAULT_ME_BG
         self.update()
 
     # ── score helpers ─────────────────────────────────────────────────────────
@@ -228,7 +234,7 @@ class PlayerRow(QWidget):
         if self._is_me:
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.setBrush(_ME_BG)
+            painter.setBrush(self._me_bg_qcolor)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 3, 3)
         super().paintEvent(event)
@@ -279,6 +285,7 @@ class _SummaryPlayerRow(QWidget):
         heal_bar_fg_show: bool = True,
         heal_bar_fg_size: int = 71,
         heal_bar_fg_color: str = "#1E6B1E",
+        me_bg_color: str = "#1E90FF33",
         bar_bg_show: bool = True,
         bar_bg_size: int = 12,
         bar_bg_color: str = "#FFFFFF",
@@ -301,6 +308,7 @@ class _SummaryPlayerRow(QWidget):
         self._outline_show = outline_show
         self._outline_size = outline_size
         self._outline_qcolor = QColor(outline_color)
+        self._me_bg_qcolor = QColor(me_bg_color) if me_bg_color else _DEFAULT_ME_BG
         self.setFixedHeight(row_height)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
@@ -397,6 +405,10 @@ class _SummaryPlayerRow(QWidget):
     def set_name_col_color(self, c: str) -> None:
         self._name_col_color = c
         self._update_name_style()
+
+    def set_me_bg_color(self, c: str) -> None:
+        self._me_bg_qcolor = QColor(c) if c else _DEFAULT_ME_BG
+        self.update()
 
     def set_is_me(self, is_me: bool) -> None:
         self._is_me = is_me
@@ -527,7 +539,7 @@ class _SummaryPlayerRow(QWidget):
         if self._is_me:
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.setBrush(_ME_BG)
+            painter.setBrush(self._me_bg_qcolor)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(self.rect().adjusted(1, 1, -1, -1), 3, 3)
         super().paintEvent(event)

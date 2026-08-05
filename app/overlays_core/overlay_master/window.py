@@ -477,10 +477,31 @@ class OverlayMasterWindow(OverlayWindow):
                 else None
             ),
         )
-        # DEF stat + Bar FG
         _add_grid_row(
             sum_grid,
             5,
+            False,
+            "Self Highlight",
+            0,
+            init_color=p.sum_me_bg_color if p else "#1E90FF33",
+            has_size=False,
+            has_color=True,
+            on_color_change=(
+                (
+                    lambda c: (
+                        setattr(p, "sum_me_bg_color", c),
+                        p.save(),
+                        self._notify("SUM", "apply_me_bg_color", c),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
+        # DEF stat + Bar FG
+        _add_grid_row(
+            sum_grid,
+            6,
             True,
             "DEF",
             p.sum_def_size if p else 8,
@@ -522,7 +543,7 @@ class OverlayMasterWindow(OverlayWindow):
         )
         _add_grid_row(
             sum_grid,
-            6,
+            7,
             True,
             "Bar FG",
             p.sum_def_bar_fg_size if p else 71,
@@ -566,7 +587,7 @@ class OverlayMasterWindow(OverlayWindow):
         # HEAL stat + Bar FG
         _add_grid_row(
             sum_grid,
-            7,
+            8,
             True,
             "HEAL",
             p.sum_heal_size if p else 8,
@@ -608,7 +629,7 @@ class OverlayMasterWindow(OverlayWindow):
         )
         _add_grid_row(
             sum_grid,
-            8,
+            9,
             True,
             "Bar FG",
             p.sum_heal_bar_fg_size if p else 71,
@@ -652,7 +673,7 @@ class OverlayMasterWindow(OverlayWindow):
         # Shared bar background
         _add_grid_row(
             sum_grid,
-            9,
+            10,
             True,
             "Bar BG",
             p.sum_bar_bg_size if p else 12,
@@ -695,7 +716,7 @@ class OverlayMasterWindow(OverlayWindow):
         )
         _add_grid_row(
             sum_grid,
-            10,
+            11,
             True,
             "Average",
             init_show=p.sum_avg_show if p else True,
@@ -715,7 +736,7 @@ class OverlayMasterWindow(OverlayWindow):
         )
         _add_grid_row(
             sum_grid,
-            11,
+            12,
             True,
             "Total",
             init_show=p.sum_total_show if p else True,
@@ -735,7 +756,7 @@ class OverlayMasterWindow(OverlayWindow):
         )
         _add_grid_row(
             sum_grid,
-            12,
+            13,
             True,
             "Bar Border",
             p.sum_bar_border_size if p else 1,
@@ -778,7 +799,7 @@ class OverlayMasterWindow(OverlayWindow):
         )
         _add_grid_row(
             sum_grid,
-            13,
+            14,
             True,
             "Score",
             p.sum_score_size if p else 9,
@@ -820,7 +841,7 @@ class OverlayMasterWindow(OverlayWindow):
         )
         _add_grid_row(
             sum_grid,
-            14,
+            15,
             True,
             "Show Companions",
             init_show=p.sum_show_companions if p else False,
@@ -840,7 +861,7 @@ class OverlayMasterWindow(OverlayWindow):
         )
         _add_grid_row(
             sum_grid,
-            15,
+            16,
             True,
             "Outline",
             p.sum_outline_size if p else 1,
@@ -883,7 +904,7 @@ class OverlayMasterWindow(OverlayWindow):
         )
         _add_grid_row(
             sum_grid,
-            16,
+            17,
             False,
             "Row Height",
             p.sum_row_height if p else 24,
@@ -905,7 +926,7 @@ class OverlayMasterWindow(OverlayWindow):
         )
         _add_grid_row(
             sum_grid,
-            17,
+            18,
             False,
             "Footer Value Size",
             p.sum_footer_value_size if p else 9,
@@ -1258,6 +1279,27 @@ class OverlayMasterWindow(OverlayWindow):
         _add_grid_row(
             dps_grid,
             9,
+            False,
+            "Self Highlight",
+            0,
+            init_color=p.dps_me_bg_color if p else "#1E90FF33",
+            has_size=False,
+            has_color=True,
+            on_color_change=(
+                (
+                    lambda c: (
+                        setattr(p, "dps_me_bg_color", c),
+                        p.save(),
+                        self._notify("DPS", "apply_me_bg_color", c),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
+        _add_grid_row(
+            dps_grid,
+            10,
             True,
             "Score",
             p.dps_score_size if p else 12,
@@ -1721,6 +1763,27 @@ class OverlayMasterWindow(OverlayWindow):
         _add_grid_row(
             def_grid,
             9,
+            False,
+            "Self Highlight",
+            0,
+            init_color=p.def_me_bg_color if p else "#1E90FF33",
+            has_size=False,
+            has_color=True,
+            on_color_change=(
+                (
+                    lambda c: (
+                        setattr(p, "def_me_bg_color", c),
+                        p.save(),
+                        self._notify("DEF", "apply_me_bg_color", c),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
+        _add_grid_row(
+            def_grid,
+            10,
             True,
             "Score",
             p.def_score_size if p else 12,
@@ -2185,6 +2248,27 @@ class OverlayMasterWindow(OverlayWindow):
         _add_grid_row(
             heal_grid,
             9,
+            False,
+            "Self Highlight",
+            0,
+            init_color=p.heal_me_bg_color if p else "#1E90FF33",
+            has_size=False,
+            has_color=True,
+            on_color_change=(
+                (
+                    lambda c: (
+                        setattr(p, "heal_me_bg_color", c),
+                        p.save(),
+                        self._notify("HEAL", "apply_me_bg_color", c),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
+        _add_grid_row(
+            heal_grid,
+            10,
             True,
             "Score",
             p.heal_score_size if p else 12,
@@ -2540,6 +2624,27 @@ class OverlayMasterWindow(OverlayWindow):
                         setattr(p, "coh_footer_value_size", v),
                         p.save(),
                         self._notify("COH", "apply_footer_value_size", v),
+                    )
+                )
+                if p
+                else None
+            ),
+        )
+        _add_grid_row(
+            coh_grid,
+            4,
+            False,
+            "Self Highlight",
+            0,
+            init_color=p.coh_me_bg_color if p else "#1E90FF33",
+            has_size=False,
+            has_color=True,
+            on_color_change=(
+                (
+                    lambda c: (
+                        setattr(p, "coh_me_bg_color", c),
+                        p.save(),
+                        self._notify("COH", "apply_me_bg_color", c),
                     )
                 )
                 if p

@@ -66,6 +66,7 @@ class SummaryWindow(_PlayerListOverlay):
         heal_fg_show = _pv("sum_heal_bar_fg_show", True)
         heal_fg_size = _pv("sum_heal_bar_fg_size", 71)
         heal_fg_color = _pv("sum_heal_bar_fg_color", "#1E6B1E")
+        me_bg_color = _pv("sum_me_bg_color", "#1E90FF33")
 
         self._min_content_width = win_width
         self._win_bg_alpha: int = _pv("sum_win_bg_alpha", 0)
@@ -127,6 +128,7 @@ class SummaryWindow(_PlayerListOverlay):
                 heal_bar_fg_show=heal_fg_show,
                 heal_bar_fg_size=heal_fg_size,
                 heal_bar_fg_color=heal_fg_color,
+                me_bg_color=me_bg_color,
                 bar_bg_show=bar_bg_show,
                 bar_bg_size=bar_bg_size,
                 bar_bg_color=bar_bg_color,
@@ -358,6 +360,7 @@ class SummaryWindow(_PlayerListOverlay):
             heal_bar_fg_show=_pv("sum_heal_bar_fg_show", True),
             heal_bar_fg_size=_pv("sum_heal_bar_fg_size", 71),
             heal_bar_fg_color=_pv("sum_heal_bar_fg_color", "#1E6B1E"),
+            me_bg_color=_pv("sum_me_bg_color", "#1E90FF33"),
             bar_bg_show=_pv("sum_bar_bg_show", True),
             bar_bg_size=_pv("sum_bar_bg_size", 12),
             bar_bg_color=_pv("sum_bar_bg_color", "#FFFFFF"),
@@ -512,6 +515,9 @@ class SummaryWindow(_PlayerListOverlay):
 
     def apply_heal_bar_fg_color(self, c: str) -> None:
         self._apply_to_rows("set_heal_bar_fg_color", c)
+
+    def apply_me_bg_color(self, c: str) -> None:
+        self._apply_to_rows("set_me_bg_color", c)
 
     def apply_show_companions(self, b: bool) -> None:
         self._show_companions = b

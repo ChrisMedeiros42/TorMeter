@@ -68,6 +68,7 @@ class _PlayerListOverlay(OverlayWindow):
         bar_fg_show = _pv(f"{g}_bar_fg_show", True)
         bar_fg_size = _pv(f"{g}_bar_fg_size", 71)
         bar_fg_color = _pv(f"{g}_bar_fg_color", self.bar_color)
+        me_bg_color = _pv(f"{g}_me_bg_color", "#1E90FF33")
         score_show = _pv(f"{g}_score_show", True)
         score_size = _pv(f"{g}_score_size", 9)
         score_color = _pv(f"{g}_score_color", "#FFD700")
@@ -116,6 +117,7 @@ class _PlayerListOverlay(OverlayWindow):
                 border_size=border_size,
                 border_color=border_color,
                 bar_color=bar_fg_color,
+                me_bg_color=me_bg_color,
                 bar_bg_show=bar_bg_show,
                 bar_bg_size=bar_bg_size,
                 bar_bg_color=bar_bg_color,
@@ -386,6 +388,7 @@ class _PlayerListOverlay(OverlayWindow):
             border_size=_pv(f"{g}_bar_border_size", 1),
             border_color=_pv(f"{g}_bar_border_color", "#FFFFFF"),
             bar_color=_pv(f"{g}_bar_fg_color", self.bar_color),
+            me_bg_color=_pv(f"{g}_me_bg_color", "#1E90FF33"),
             bar_bg_show=_pv(f"{g}_bar_bg_show", True),
             bar_bg_size=_pv(f"{g}_bar_bg_size", 12),
             bar_bg_color=_pv(f"{g}_bar_bg_color", "#FFFFFF"),
@@ -511,6 +514,9 @@ class _PlayerListOverlay(OverlayWindow):
 
     def apply_bar_fg_color(self, c: str) -> None:
         self._apply_to_rows("set_bar_fg_color", c)
+
+    def apply_me_bg_color(self, c: str) -> None:
+        self._apply_to_rows("set_me_bg_color", c)
 
     def apply_score_show(self, b: bool) -> None:
         self._apply_to_rows("set_score_show", b)

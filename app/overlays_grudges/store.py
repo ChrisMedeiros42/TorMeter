@@ -200,6 +200,60 @@ class GrudgesStore:
         if persist:
             self.save()
 
+    def import_legacy_character(self, source_name: str, target_name: str, *, persist: bool = True) -> bool:
+        source = (source_name or "").strip()
+        target = (target_name or "").strip()
+        if not source or not target or source.casefold() == target.casefold():
+            return False
+
+        source_book = self._books.get(source)
+        if source_book is None:
+            return False
+
+        target_book = self._books.get(target)
+        if target_book is None:
+            source_book.character_name = target
+            self._books[target] = source_book
+        else:
+            target_book.updated_at_ms = max(target_book.updated_at_ms, source_book.updated_at_ms)
+            target_book.fights += source_book.fights
+            target_book.kills += source_book.kills
+            for enemy_key, source_record in source_book.enemies.items():
+                target_record = target_book.enemies.get(enemy_key)
+                if target_record is None:
+                    target_book.enemies[enemy_key] = source_record
+                    continue
+                target_record.encounters += source_record.encounters
+                target_record.kills += source_record.kills
+                target_record.deaths += source_record.deaths
+                target_record.damage_out += source_record.damage_out
+                target_record.damage_in += source_record.damage_in
+                target_record.hits += source_record.hits
+                target_record.crit_hits += source_record.crit_hits
+                target_record.ttk_total_ms += source_record.ttk_total_ms
+                target_record.ttk_samples += source_record.ttk_samples
+                target_record.fastest_ttk_ms = (
+                    source_record.fastest_ttk_ms
+                    if target_record.fastest_ttk_ms <= 0
+                    else min(target_record.fastest_ttk_ms, source_record.fastest_ttk_ms or target_record.fastest_ttk_ms)
+                )
+                target_record.slowest_ttk_ms = max(target_record.slowest_ttk_ms, source_record.slowest_ttk_ms)
+                target_record.first_seen_ms = (
+                    source_record.first_seen_ms
+                    if target_record.first_seen_ms <= 0
+                    else min(target_record.first_seen_ms, source_record.first_seen_ms or target_record.first_seen_ms)
+                )
+                target_record.last_seen_ms = max(target_record.last_seen_ms, source_record.last_seen_ms)
+                for enemy_id in source_record.observed_ids:
+                    if enemy_id not in target_record.observed_ids:
+                        target_record.observed_ids.append(enemy_id)
+
+        if source.casefold() != target.casefold():
+            self._books.pop(source, None)
+        if persist:
+            self.save()
+        return True
+
     def _enemy_key(self, entity) -> str | None:
         if entity is None or getattr(entity, "kind", None) != NPC:
             return None

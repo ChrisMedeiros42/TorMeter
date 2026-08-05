@@ -87,6 +87,7 @@ class Preferences:
         self.sum_dps_bar_fg_show: bool = True
         self.sum_dps_bar_fg_size: int = 71
         self.sum_dps_bar_fg_color: str = "#7A2020"
+        self.sum_me_bg_color: str = "#1E90FF33"
         self.sum_def_bar_fg_show: bool = True
         self.sum_def_bar_fg_size: int = 71
         self.sum_def_bar_fg_color: str = "#1E3A7A"
@@ -113,6 +114,7 @@ class Preferences:
         self.dps_bar_fg_show: bool = True
         self.dps_bar_fg_size: int = 71
         self.dps_bar_fg_color: str = "#7A2020"
+        self.dps_me_bg_color: str = "#1E90FF33"
         self.dps_score_show: bool = True
         self.dps_score_size: int = 12
         self.dps_score_color: str = "#FFD700"
@@ -133,6 +135,7 @@ class Preferences:
         self.def_bar_fg_show: bool = True
         self.def_bar_fg_size: int = 71
         self.def_bar_fg_color: str = "#1E3A7A"
+        self.def_me_bg_color: str = "#1E90FF33"
         self.def_score_show: bool = True
         self.def_score_size: int = 12
         self.def_score_color: str = "#FFD700"
@@ -153,6 +156,7 @@ class Preferences:
         self.heal_bar_fg_show: bool = True
         self.heal_bar_fg_size: int = 71
         self.heal_bar_fg_color: str = "#1E6B1E"
+        self.heal_me_bg_color: str = "#1E90FF33"
         self.heal_score_show: bool = True
         self.heal_score_size: int = 12
         self.heal_score_color: str = "#FFD700"
@@ -175,6 +179,7 @@ class Preferences:
         self.coh_name_size: int = 10
         self.coh_name_color: str = "#FFFFFF"
         self.coh_stat_size: int = 10
+        self.coh_me_bg_color: str = "#1E90FF33"
         self.coh_list_height: int = 520
         self.coh_label_size: int = 10
         self.coh_footer_value_size: int = 9
@@ -262,6 +267,7 @@ class Preferences:
             self.sum_dps_bar_fg_show = om.get("sum_dps_bar_fg_show", True)
             self.sum_dps_bar_fg_size = om.get("sum_dps_bar_fg_size", 71)
             self.sum_dps_bar_fg_color = om.get("sum_dps_bar_fg_color", "#7A2020")
+            self.sum_me_bg_color = om.get("sum_me_bg_color", "#1E90FF33")
             self.sum_def_bar_fg_show = om.get("sum_def_bar_fg_show", True)
             self.sum_def_bar_fg_size = om.get("sum_def_bar_fg_size", 71)
             self.sum_def_bar_fg_color = om.get("sum_def_bar_fg_color", "#1E3A7A")
@@ -288,6 +294,7 @@ class Preferences:
             self.dps_bar_fg_show = om.get("dps_bar_fg_show", True)
             self.dps_bar_fg_size = om.get("dps_bar_fg_size", 71)
             self.dps_bar_fg_color = om.get("dps_bar_fg_color", "#7A2020")
+            self.dps_me_bg_color = om.get("dps_me_bg_color", "#1E90FF33")
             self.dps_score_show = om.get("dps_score_show", True)
             self.dps_score_size = om.get("dps_score_size", 12)
             self.dps_score_color = om.get("dps_score_color", "#FFD700")
@@ -308,6 +315,7 @@ class Preferences:
             self.def_bar_fg_show = om.get("def_bar_fg_show", True)
             self.def_bar_fg_size = om.get("def_bar_fg_size", 71)
             self.def_bar_fg_color = om.get("def_bar_fg_color", "#1E3A7A")
+            self.def_me_bg_color = om.get("def_me_bg_color", "#1E90FF33")
             self.def_score_show = om.get("def_score_show", True)
             self.def_score_size = om.get("def_score_size", 12)
             self.def_score_color = om.get("def_score_color", "#FFD700")
@@ -328,6 +336,7 @@ class Preferences:
             self.heal_bar_fg_show = om.get("heal_bar_fg_show", True)
             self.heal_bar_fg_size = om.get("heal_bar_fg_size", 71)
             self.heal_bar_fg_color = om.get("heal_bar_fg_color", "#1E6B1E")
+            self.heal_me_bg_color = om.get("heal_me_bg_color", "#1E90FF33")
             self.heal_score_show = om.get("heal_score_show", True)
             self.heal_score_size = om.get("heal_score_size", 12)
             self.heal_score_color = om.get("heal_score_color", "#FFD700")
@@ -348,6 +357,7 @@ class Preferences:
             self.coh_name_size = om.get("coh_name_size", 10)
             self.coh_name_color = om.get("coh_name_color", "#FFFFFF")
             self.coh_stat_size = om.get("coh_stat_size", 10)
+            self.coh_me_bg_color = om.get("coh_me_bg_color", "#1E90FF33")
             _coh_list_h = om.get("coh_list_height", 520)
             self.coh_list_height = 520 if _coh_list_h < 260 else _coh_list_h
             self.coh_label_size = om.get("coh_label_size", 10)
@@ -474,6 +484,7 @@ class Preferences:
                 "sum_dps_bar_fg_show": self.sum_dps_bar_fg_show,
                 "sum_dps_bar_fg_size": self.sum_dps_bar_fg_size,
                 "sum_dps_bar_fg_color": self.sum_dps_bar_fg_color,
+                "sum_me_bg_color": self.sum_me_bg_color,
                 "sum_def_bar_fg_show": self.sum_def_bar_fg_show,
                 "sum_def_bar_fg_size": self.sum_def_bar_fg_size,
                 "sum_def_bar_fg_color": self.sum_def_bar_fg_color,
@@ -500,6 +511,7 @@ class Preferences:
                 "dps_bar_fg_show": self.dps_bar_fg_show,
                 "dps_bar_fg_size": self.dps_bar_fg_size,
                 "dps_bar_fg_color": self.dps_bar_fg_color,
+                "dps_me_bg_color": self.dps_me_bg_color,
                 "dps_score_show": self.dps_score_show,
                 "dps_score_size": self.dps_score_size,
                 "dps_score_color": self.dps_score_color,
@@ -520,6 +532,7 @@ class Preferences:
                 "def_bar_fg_show": self.def_bar_fg_show,
                 "def_bar_fg_size": self.def_bar_fg_size,
                 "def_bar_fg_color": self.def_bar_fg_color,
+                "def_me_bg_color": self.def_me_bg_color,
                 "def_score_show": self.def_score_show,
                 "def_score_size": self.def_score_size,
                 "def_score_color": self.def_score_color,
@@ -540,6 +553,7 @@ class Preferences:
                 "heal_bar_fg_show": self.heal_bar_fg_show,
                 "heal_bar_fg_size": self.heal_bar_fg_size,
                 "heal_bar_fg_color": self.heal_bar_fg_color,
+                "heal_me_bg_color": self.heal_me_bg_color,
                 "heal_score_show": self.heal_score_show,
                 "heal_score_size": self.heal_score_size,
                 "heal_score_color": self.heal_score_color,
@@ -560,6 +574,7 @@ class Preferences:
                 "coh_name_size": self.coh_name_size,
                 "coh_name_color": self.coh_name_color,
                 "coh_stat_size": self.coh_stat_size,
+                "coh_me_bg_color": self.coh_me_bg_color,
                 "coh_list_height": self.coh_list_height,
                 "coh_label_size": self.coh_label_size,
                 "coh_footer_value_size": self.coh_footer_value_size,

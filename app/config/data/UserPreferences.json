@@ -1,7 +1,7 @@
 {
   "enable_hotkey": "Ctrl+Shift+F7",
   "overlay_master": {
-    "character_name": "Tainted Juicie",
+    "character_name": "Braxvina Prime",
     "log_folder": "",
     "sum_name_size": 12,
     "sum_dps_size": 12,
@@ -56,6 +56,7 @@
     "sum_dps_bar_fg_show": true,
     "sum_dps_bar_fg_size": 71,
     "sum_dps_bar_fg_color": "#7A2020",
+    "sum_me_bg_color": "#1E90FF33",
     "sum_def_bar_fg_show": true,
     "sum_def_bar_fg_size": 71,
     "sum_def_bar_fg_color": "#1E3A7A",
@@ -82,6 +83,7 @@
     "dps_bar_fg_show": true,
     "dps_bar_fg_size": 71,
     "dps_bar_fg_color": "#7A2020",
+    "dps_me_bg_color": "#1E90FF33",
     "dps_score_show": true,
     "dps_score_size": 12,
     "dps_score_color": "#FFD700",
@@ -102,6 +104,7 @@
     "def_bar_fg_show": true,
     "def_bar_fg_size": 71,
     "def_bar_fg_color": "#1E3A7A",
+    "def_me_bg_color": "#1E90FF33",
     "def_score_show": true,
     "def_score_size": 12,
     "def_score_color": "#FFD700",
@@ -122,6 +125,7 @@
     "heal_bar_fg_show": true,
     "heal_bar_fg_size": 59,
     "heal_bar_fg_color": "#1E6B1E",
+    "heal_me_bg_color": "#1E90FF33",
     "heal_score_show": true,
     "heal_score_size": 12,
     "heal_score_color": "#FFD700",
@@ -142,6 +146,7 @@
     "coh_name_size": 12,
     "coh_name_color": "#FFFFFF",
     "coh_stat_size": 13,
+    "coh_me_bg_color": "#1E90FF33",
     "coh_list_height": 520,
     "coh_label_size": 10,
     "coh_footer_value_size": 12,
@@ -156,27 +161,27 @@
     "cht_val_size": 10,
     "cht_label_size": 10,
     "cht_footer_value_size": 12,
-    "nbg_win_width": 1000,
-    "nbg_win_height": 323,
+    "nbg_win_width": 440,
+    "nbg_win_height": 269,
     "nbg_win_bg_alpha": 200,
     "nbg_win_bg_color": "#000000",
     "nbg_label_size": 13,
-    "nbg_sort_mode": "Kills",
+    "nbg_sort_mode": "Last Seen",
     "nbg_search_text": "",
     "nbg_columns_visible": {
       "enemy": true,
-      "encounters": true,
+      "encounters": false,
       "kills": true,
-      "deaths": true,
+      "deaths": false,
       "avg_ttk": true,
       "fastest_ttk": true,
-      "damage_out": true,
-      "damage_in": true,
-      "avg_out": true,
-      "avg_in": true,
-      "kill_rate": true,
+      "damage_out": false,
+      "damage_in": false,
+      "avg_out": false,
+      "avg_in": false,
+      "kill_rate": false,
       "crit_rate": true,
-      "last_seen": true
+      "last_seen": false
     }
   },
   "windows": {
@@ -196,7 +201,7 @@
       "default_y": 100,
       "expand": "down",
       "anchor": "top-left",
-      "visible": true
+      "visible": false
     },
     "TorMeter Menu": {
       "x": 1660,
@@ -262,8 +267,8 @@
       "visible": false
     },
     "Nihilus' Book of Grudges": {
-      "x": 50,
-      "y": 50,
+      "x": -2,
+      "y": 238,
       "default_x": 100,
       "default_y": 100,
       "expand": "down",

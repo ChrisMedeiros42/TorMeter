@@ -47,6 +47,7 @@ class CombatHistoryOverlay(OverlayWindow):
         self._session_loader: SessionLoader | None = None
         self._viewing_live = True  # False when a previous session is selected
         self._live_fight_row: _FightRow | None = None  # row for in-progress fight
+        self._me_bg_color = (p.coh_me_bg_color if p else "#1E90FF33")
 
         # Apply saved width/height from prefs
         if p:
@@ -217,6 +218,15 @@ class CombatHistoryOverlay(OverlayWindow):
                 re.sub(r"font-size:\s*\d+px", f"font-size: {v}px", lbl.styleSheet())
             )
 
+    def apply_me_bg_color(self, c: str) -> None:
+        if self._prefs:
+            self._prefs.coh_me_bg_color = c
+        self._me_bg_color = c
+        for row in self._fight_rows:
+            row.set_me_bg_color(c)
+        if self._live_fight_row is not None:
+            self._live_fight_row.set_me_bg_color(c)
+
     def apply_footer_value_size(self, v: int) -> None:
         self._footer.set_value_size(v)
         if self._prefs:
@@ -310,7 +320,12 @@ class CombatHistoryOverlay(OverlayWindow):
         for existing in self._fight_rows:
             existing.collapse(notify=False)
         self._selected_fight = None
-        row = _FightRow(fight, self._display_player, on_select=self._on_fight_selected)
+        row = _FightRow(
+            fight,
+            self._display_player,
+            on_select=self._on_fight_selected,
+            me_bg_color=self._me_bg_color,
+        )
         row.update_filter(self._filter_btn.hidden_players)
         if p:
             row.set_name_size(p.coh_name_size)
@@ -347,7 +362,12 @@ class CombatHistoryOverlay(OverlayWindow):
             existing.collapse(notify=False)
         self._selected_fight = None
 
-        row = _FightRow(fight, self._display_player, on_select=self._on_fight_selected)
+        row = _FightRow(
+            fight,
+            self._display_player,
+            on_select=self._on_fight_selected,
+            me_bg_color=self._me_bg_color,
+        )
         row.update_filter(self._filter_btn.hidden_players)
         if p:
             row.set_name_size(p.coh_name_size)
@@ -475,7 +495,12 @@ class CombatHistoryOverlay(OverlayWindow):
         # Insert fights so the most recent appears at the top.
         # Each fight is inserted at position 0, so the last fight ends up first.
         for fight in session.fights:
-            row = _FightRow(fight, self._display_player, on_select=self._on_fight_selected)
+            row = _FightRow(
+                fight,
+                self._display_player,
+                on_select=self._on_fight_selected,
+                me_bg_color=self._me_bg_color,
+            )
             if p:
                 row.set_name_size(p.coh_name_size)
                 row.set_stat_size(p.coh_stat_size)

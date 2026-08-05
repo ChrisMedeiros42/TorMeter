@@ -228,13 +228,14 @@ class _ColorButton(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             dlg = QColorDialog(self._color, self.window())
             dlg.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
+            dlg.setOption(QColorDialog.ColorDialogOption.ShowAlphaChannel, True)
             if dlg.exec():
                 chosen = dlg.currentColor()
                 if chosen.isValid():
                     self._color = chosen
                     self.update()
                     if self._callback:
-                        self._callback(chosen.name())
+                        self._callback(chosen.name(QColor.NameFormat.HexArgb))
         event.accept()
 
 

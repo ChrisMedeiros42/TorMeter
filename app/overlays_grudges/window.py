@@ -152,6 +152,7 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
 
     def __init__(self, prefs=None):
         self._store = GrudgesStore()
+        self._ui_ready = False
         self._my_name: str | None = None
         self._page_size = 10
         self._page_index = 0
@@ -161,6 +162,7 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
         self._column_visible: dict[str, bool] = {
             key: True for key, _, _ in _COLUMN_DEFS
         }
+        self._migration_notice: str = ""
         if prefs is not None:
             pref_cols = getattr(prefs, "nbg_columns_visible", {}) or {}
             if isinstance(pref_cols, dict):
@@ -190,6 +192,15 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
         )
         self._title_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self._layout.addWidget(self._title_lbl)
+
+        self._notice_lbl = QLabel("")
+        self._notice_lbl.setStyleSheet(
+            "color: rgba(120, 220, 140, 210); font-size: 9px; background: transparent;"
+        )
+        self._notice_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self._notice_lbl.setWordWrap(True)
+        self._notice_lbl.setVisible(False)
+        self._layout.addWidget(self._notice_lbl)
 
         controls = QWidget()
         controls_l = QHBoxLayout(controls)
@@ -334,9 +345,12 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
         pager_l.addWidget(self._page_lbl)
         self._layout.addWidget(pager)
 
+        self._ui_ready = True
+
         if p:
             self.apply_text_size(p.nbg_label_size)
         self._apply_column_visibility()
+        self._import_legacy_me_book()
         self._refresh_from_store()
 
     def receive_watcher(self, watcher) -> None:
@@ -405,6 +419,7 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
     def apply_character_name(self, name: str) -> None:
         self._my_name = (name or "").strip() or None
         self._page_index = 0
+        self._import_legacy_me_book()
         self._refresh_from_store()
 
     def _current_character_name(self) -> str | None:
@@ -413,6 +428,15 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
         if not candidate or candidate.casefold() == "me":
             return None
         return candidate
+
+    def _import_legacy_me_book(self) -> None:
+        character_name = self._current_character_name()
+        if character_name is None:
+            return
+        if self._store.import_legacy_character("Me", character_name):
+            self._migration_notice = f"Imported legacy Me grudge data into {character_name}."
+            self._notice_lbl.setText(self._migration_notice)
+            self._notice_lbl.setVisible(True)
 
     def _on_fight_closed(self, fight: Fight) -> None:
         character_name = self._current_character_name()
@@ -425,6 +449,9 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
         self._refresh_from_store()
 
     def _clear_rows(self) -> None:
+        if not self._ui_ready or not hasattr(self, "_list_layout"):
+            self._rows.clear()
+            return
         while self._list_layout.count():
             item = self._list_layout.takeAt(0)
             if item is None:
@@ -436,7 +463,16 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
         self._rows.clear()
 
     def _refresh_from_store(self) -> None:
+        if not self._ui_ready:
+            return
         self._clear_rows()
+
+        if self._migration_notice:
+            self._notice_lbl.setText(self._migration_notice)
+            self._notice_lbl.setVisible(True)
+            self._migration_notice = ""
+        else:
+            self._notice_lbl.setVisible(False)
 
         character_name = self._current_character_name()
         if character_name is None:
@@ -543,6 +579,8 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
             self._prefs.nbg_search_text = (text or "").strip()
             self._prefs.save()
         self._page_index = 0
+        if not self._ui_ready:
+            return
         self._refresh_from_store()
 
     def _on_sort_changed(self, text: str) -> None:
@@ -551,6 +589,8 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
             self._prefs.nbg_sort_mode = self._sort_mode
             self._prefs.save()
         self._page_index = 0
+        if not self._ui_ready:
+            return
         self._refresh_from_store()
 
     def _open_filters_menu(self) -> None:
