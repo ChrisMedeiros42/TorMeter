@@ -9,7 +9,7 @@
 
 import ctypes
 
-from PyQt6.QtWidgets import QLabel, QSizeGrip, QSizePolicy, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 from PyQt6.QtCore import Qt, QPoint, QRect, QSize, QTimer
 from PyQt6.QtGui import QFont, QKeyEvent, QMouseEvent, QPainter, QColor, QPen
 
@@ -28,7 +28,7 @@ CLOSE_BTN_SIZE = 8  # square hit area for the X button
 CLOSE_BTN_MARGIN = 4  # gap between X and the right border
 CONTENT_PADDING = 4  # padding around child content (left, right, bottom)
 INITIAL_WIDTH_EXTRA = 50  # extra starting width beyond content
-RESIZE_GRIP_SIZE = 12
+RESIZE_HOTZONE_SIZE = 14
 
 
 class OverlayWindow(QWidget):
@@ -45,6 +45,8 @@ class OverlayWindow(QWidget):
         self._prefs = prefs
         self._click_through = True
         self._drag_start: QPoint | None = None
+        self._resize_start_global: QPoint | None = None
+        self._resize_start_size: QSize | None = None
         self._programmatic_resize = False
         self._manual_window_size: QSize | None = None
         self._vis_obs: ObservableValue | None = None
@@ -77,9 +79,11 @@ class OverlayWindow(QWidget):
         content_w = max(
             content_size.width(), INITIAL_WIDTH_EXTRA, self._min_content_width
         )
+        # A saved height means the overlay reopens exactly as the user left it.
+        content_h = self._max_content_height or content_size.height()
         _content_offset = BORDER_WIDTH + CONTENT_PADDING
         w = content_w + _content_offset * 2
-        h = MENU_BAR_HEIGHT + content_size.height() + _content_offset
+        h = MENU_BAR_HEIGHT + content_h + _content_offset
         self.resize(w, h)
 
         # Explicitly size the content widget to fill the padded area
@@ -87,18 +91,6 @@ class OverlayWindow(QWidget):
             "background: transparent;"
         )  # enables proper child clipping
 
-        self._size_grip = QSizeGrip(self)
-        self._size_grip.setFixedSize(RESIZE_GRIP_SIZE, RESIZE_GRIP_SIZE)
-        self._size_grip.setStyleSheet(
-            "QSizeGrip {"
-            " background: rgba(0,0,0,120);"
-            " border-top: 1px solid rgba(255,255,255,90);"
-            " border-left: 1px solid rgba(255,255,255,90);"
-            " border-bottom-right-radius: 3px;"
-            "}"
-        )
-        self._size_grip.setCursor(Qt.CursorShape.SizeFDiagCursor)
-        self._size_grip.raise_()
         self._sync_layout_geometry()
 
         if self._prefs is not None:
@@ -224,14 +216,29 @@ class OverlayWindow(QWidget):
 
         QTimer.singleShot(0, _do)
 
+    def _sync_manual_content_size(
+        self, content_w: int | None = None, content_h: int | None = None
+    ) -> None:
+        """
+        Keep the remembered drag size in step with an explicitly applied size,
+        so slider-driven shrinking is not blocked by an older manual size.
+        """
+        if self._manual_window_size is None:
+            return
+        co = BORDER_WIDTH + CONTENT_PADDING
+        w = self._manual_window_size.width()
+        h = self._manual_window_size.height()
+        if content_w is not None:
+            w = content_w + co * 2
+        if content_h is not None:
+            h = MENU_BAR_HEIGHT + content_h + co
+        self._manual_window_size = QSize(w, h)
+
     def _sync_layout_geometry(self) -> None:
         co = BORDER_WIDTH + CONTENT_PADDING
         content_w = max(1, self.width() - co * 2)
         content_h = max(1, self.height() - MENU_BAR_HEIGHT - co)
         self._content.setGeometry(co, MENU_BAR_HEIGHT, content_w, content_h)
-        if hasattr(self, "_size_grip"):
-            self._size_grip.move(self.width() - self._size_grip.width(), self.height() - self._size_grip.height())
-
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._sync_layout_geometry()
@@ -247,16 +254,15 @@ class OverlayWindow(QWidget):
         y = bar_top + (bar_height - CLOSE_BTN_SIZE) // 2
         return QRect(x, y, CLOSE_BTN_SIZE, CLOSE_BTN_SIZE)
 
+    def _resize_hotzone_rect(self) -> QRect:
+        size = RESIZE_HOTZONE_SIZE
+        return QRect(self.width() - size, self.height() - size, size, size)
+
     def paintEvent(self, event):
         super().paintEvent(event)
         # Always render a visible corner cue so the resize affordance is obvious.
         grip_p = QPainter(self)
         grip_p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        # Dark backing + bright hatch keeps contrast on both light and dark fills.
-        grip_p.setPen(Qt.PenStyle.NoPen)
-        grip_p.setBrush(QColor(0, 0, 0, 120))
-        grip_p.drawRoundedRect(self.width() - 16, self.height() - 16, 14, 14, 2, 2)
-
         grip_col = QColor(210, 240, 255, 220 if not self._click_through else 180)
         grip_pen = QPen(grip_col)
         grip_pen.setWidth(2)
@@ -329,6 +335,10 @@ class OverlayWindow(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent):
         if not self._click_through and event.button() == Qt.MouseButton.LeftButton:
+            if self._resize_hotzone_rect().contains(event.position().toPoint()):
+                self._resize_start_global = event.globalPosition().toPoint()
+                self._resize_start_size = self.size()
+                return
             if self._close_btn_rect().contains(event.position().toPoint()):
                 self.close()
                 return
@@ -339,14 +349,37 @@ class OverlayWindow(QWidget):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent):
+        if (
+            self._resize_start_global is not None
+            and self._resize_start_size is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            delta = event.globalPosition().toPoint() - self._resize_start_global
+            co = BORDER_WIDTH + CONTENT_PADDING
+            min_content_w = max(self._content.minimumSizeHint().width(), self._min_content_width)
+            min_content_h = self._content.minimumSizeHint().height()
+            min_w = max(80, min_content_w + co * 2)
+            min_h = max(60, MENU_BAR_HEIGHT + min_content_h + co)
+            new_w = max(min_w, self._resize_start_size.width() + delta.x())
+            new_h = max(min_h, self._resize_start_size.height() + delta.y())
+            self.resize(new_w, new_h)
+            return
+
         if self._drag_start is not None and event.buttons() & Qt.MouseButton.LeftButton:
             self.move(event.globalPosition().toPoint() - self._drag_start)
+
+        if not self._click_through and self._resize_hotzone_rect().contains(event.position().toPoint()):
+            self.setCursor(Qt.CursorShape.SizeFDiagCursor)
+        else:
+            self.unsetCursor()
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         if self._drag_start is not None and self._prefs is not None:
             pos = self.frameGeometry().topLeft()
             self._prefs.set_position(self.window_name, pos.x(), pos.y())
+        self._resize_start_global = None
+        self._resize_start_size = None
         self._drag_start = None
         super().mouseReleaseEvent(event)
 

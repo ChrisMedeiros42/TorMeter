@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 import math
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QAction, QColor, QPainter, QPen
 from PyQt6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton, QScrollArea, QVBoxLayout, QWidget, QSizePolicy
 
 from app.combat_session import Fight
-from app.overlays_shared.player_match import player_stats_matches
 from app.window import OverlayWindow
 
 from .store import CharacterGrudgeBook, GrudgesStore
@@ -55,6 +55,7 @@ class _EnemyRowData:
 class _EnemyRow(QWidget):
     def __init__(self, data: _EnemyRowData, parent=None):
         super().__init__(parent)
+        self._last_seen_ms: int = 0
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(28)
 
@@ -125,6 +126,7 @@ class _EnemyRow(QWidget):
         return lbl
 
     def set_data(self, data: _EnemyRowData) -> None:
+        self._last_seen_ms = data.last_seen_ms
         self._name.setText(data.name)
         self._enc.setText(str(data.encounters))
         self._kills.setText(str(data.kills))
@@ -137,7 +139,10 @@ class _EnemyRow(QWidget):
         self._avg_in.setText(_fmt_avg(data.avg_damage_in))
         self._rate.setText(f"{data.kill_rate:.0%}")
         self._crit.setText(f"{data.crit_rate:.0%}")
-        self._last.setText(_fmt_log_time(data.last_seen_ms))
+        self._last.setText(_fmt_last_seen_delta(self._last_seen_ms))
+
+    def refresh_last_seen_label(self) -> None:
+        self._last.setText(_fmt_last_seen_delta(self._last_seen_ms))
 
     def set_column_visible(self, key: str, visible: bool) -> None:
         col = self._columns.get(key)
@@ -153,6 +158,7 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
     def __init__(self, prefs=None):
         self._store = GrudgesStore()
         self._ui_ready = False
+        self._watcher = None
         self._my_name: str | None = None
         self._page_size = 10
         self._page_index = 0
@@ -163,6 +169,7 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
             key: True for key, _, _ in _COLUMN_DEFS
         }
         self._migration_notice: str = ""
+        self._save_error_notice: str = ""
         if prefs is not None:
             pref_cols = getattr(prefs, "nbg_columns_visible", {}) or {}
             if isinstance(pref_cols, dict):
@@ -173,6 +180,7 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
         self._column_visible["enemy"] = True
         self._search_text = ""
         self._sort_mode = "Kills"
+        self._last_seen_timer: QTimer | None = None
         if prefs is not None:
             self._search_text = (getattr(prefs, "nbg_search_text", "") or "").strip().casefold()
             self._sort_mode = (getattr(prefs, "nbg_sort_mode", "Kills") or "Kills").strip() or "Kills"
@@ -352,6 +360,11 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
         self._apply_column_visibility()
         self._import_legacy_me_book()
         self._refresh_from_store()
+        if self._last_seen_timer is None:
+            self._last_seen_timer = QTimer(self)
+            self._last_seen_timer.setInterval(1000)
+            self._last_seen_timer.timeout.connect(self._tick_last_seen)
+        self._last_seen_timer.start()
 
     def receive_watcher(self, watcher) -> None:
         self._watcher = watcher
@@ -362,12 +375,14 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
         self._min_content_width = v
         if self._prefs:
             self._prefs.nbg_win_width = v
+        self._sync_manual_content_size(content_w=v)
         self._resize_to_content()
 
     def apply_win_height(self, v: int) -> None:
         self._max_content_height = v
         if self._prefs:
             self._prefs.nbg_win_height = v
+        self._sync_manual_content_size(content_h=v)
         self._resize_to_content()
 
     def apply_win_bg_alpha(self, v: int) -> None:
@@ -443,6 +458,12 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
         if character_name is None:
             return
         if self._store.record_fight(character_name, fight):
+            err = self._store.last_save_error
+            self._save_error_notice = (
+                f"Could not save Grudges.json: {err}. In-memory updates shown until restart."
+                if err
+                else ""
+            )
             self._refresh_from_store()
 
     def _on_session_reset(self) -> None:
@@ -469,8 +490,17 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
 
         if self._migration_notice:
             self._notice_lbl.setText(self._migration_notice)
+            self._notice_lbl.setStyleSheet(
+                "color: rgba(120, 220, 140, 210); font-size: 9px; background: transparent;"
+            )
             self._notice_lbl.setVisible(True)
             self._migration_notice = ""
+        elif self._save_error_notice:
+            self._notice_lbl.setText(self._save_error_notice)
+            self._notice_lbl.setStyleSheet(
+                "color: rgba(255, 140, 140, 230); font-size: 9px; background: transparent;"
+            )
+            self._notice_lbl.setVisible(True)
         else:
             self._notice_lbl.setVisible(False)
 
@@ -543,35 +573,42 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
             for record in book.enemies.values()
             if not self._search_text or self._search_text in record.name.casefold()
         ]
-        records.sort(key=self._sort_key)
+        now_clock_ms = _now_clock_ms()
+        mode = (self._sort_mode or "Kills").strip().casefold()
+        if mode == "name":
+            records.sort(key=lambda r: (r.name.casefold(), -r.kills, -r.encounters))
+        elif mode == "deaths":
+            records.sort(key=lambda r: (r.deaths, r.kills, r.encounters, r.last_seen_ms, r.name.casefold()), reverse=True)
+        elif mode == "encounters":
+            records.sort(key=lambda r: (r.encounters, r.kills, r.last_seen_ms, r.name.casefold()), reverse=True)
+        elif mode == "avg ttk":
+            records.sort(key=lambda r: (r.avg_ttk_ms, r.kills, r.encounters, r.name.casefold()), reverse=True)
+        elif mode == "fastest ttk":
+            records.sort(key=lambda r: (r.fastest_ttk_ms <= 0, r.fastest_ttk_ms, -r.kills, r.name.casefold()))
+        elif mode == "damage out":
+            records.sort(key=lambda r: (r.damage_out, r.kills, r.encounters, r.name.casefold()), reverse=True)
+        elif mode == "damage in":
+            records.sort(key=lambda r: (r.damage_in, r.kills, r.encounters, r.name.casefold()), reverse=True)
+        elif mode == "avg damage out":
+            records.sort(key=lambda r: (r.avg_damage_out, r.kills, r.encounters, r.name.casefold()), reverse=True)
+        elif mode == "avg damage in":
+            records.sort(key=lambda r: (r.avg_damage_in, r.kills, r.encounters, r.name.casefold()), reverse=True)
+        elif mode == "kill %":
+            records.sort(key=lambda r: (r.kill_rate, r.kills, r.encounters, r.name.casefold()), reverse=True)
+        elif mode == "crit %":
+            records.sort(key=lambda r: (r.crit_rate, r.kills, r.encounters, r.name.casefold()), reverse=True)
+        elif mode == "last seen":
+            records.sort(
+                key=lambda r: (
+                    _elapsed_since_log_clock_ms(r.last_seen_ms, now_clock_ms),
+                    -r.kills,
+                    -r.encounters,
+                    r.name.casefold(),
+                )
+            )
+        else:
+            records.sort(key=lambda r: (r.kills, r.encounters, r.last_seen_ms, r.name.casefold()), reverse=True)
         return records
-
-    def _sort_key(self, record: _EnemyRowData):
-        if self._sort_mode == "Deaths":
-            return (-record.deaths, -record.kills, -record.encounters, record.name.casefold())
-        if self._sort_mode == "Encounters":
-            return (-record.encounters, -record.kills, -record.last_seen_ms, record.name.casefold())
-        if self._sort_mode == "Avg TTK":
-            return (-record.avg_ttk_ms, -record.kills, record.name.casefold())
-        if self._sort_mode == "Fastest TTK":
-            return (record.fastest_ttk_ms or 10**12, -record.kills, record.name.casefold())
-        if self._sort_mode == "Damage Out":
-            return (-record.damage_out, -record.kills, record.name.casefold())
-        if self._sort_mode == "Damage In":
-            return (-record.damage_in, -record.kills, record.name.casefold())
-        if self._sort_mode == "Avg Damage Out":
-            return (-record.avg_damage_out, -record.kills, record.name.casefold())
-        if self._sort_mode == "Avg Damage In":
-            return (-record.avg_damage_in, -record.kills, record.name.casefold())
-        if self._sort_mode == "Kill %":
-            return (-record.kill_rate, -record.kills, record.name.casefold())
-        if self._sort_mode == "Crit %":
-            return (-record.crit_rate, -record.kills, record.name.casefold())
-        if self._sort_mode == "Last Seen":
-            return (-record.last_seen_ms, -record.kills, record.name.casefold())
-        if self._sort_mode == "Name":
-            return (record.name.casefold(), -record.kills, -record.encounters, record.name.casefold())
-        return (-record.kills, -record.encounters, -record.last_seen_ms, record.name.casefold())
 
     def _on_search_changed(self, text: str) -> None:
         self._search_text = (text or "").strip().casefold()
@@ -643,6 +680,12 @@ class NihilusBookOfGrudgesOverlay(OverlayWindow):
             self._page_index += 1
             self._refresh_from_store()
 
+    def _tick_last_seen(self) -> None:
+        if not self._ui_ready or not self._rows:
+            return
+        for row in self._rows:
+            row.refresh_last_seen_label()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -684,11 +727,30 @@ def _fmt_duration(value_s: float) -> str:
     return f"{value_s:.0f}s"
 
 
-def _fmt_log_time(timestamp_ms: int) -> str:
+def _now_clock_ms() -> int:
+    now = datetime.now()
+    return ((now.hour * 3600 + now.minute * 60 + now.second) * 1000) + (now.microsecond // 1000)
+
+
+def _elapsed_since_log_clock_ms(timestamp_ms: int, now_clock_ms: int | None = None) -> int:
     if timestamp_ms <= 0:
+        return 10**12
+    now_ms = _now_clock_ms() if now_clock_ms is None else now_clock_ms
+    day_ms = 24 * 60 * 60 * 1000
+    delta = now_ms - timestamp_ms
+    if delta < 0:
+        delta += day_ms
+    return max(0, delta)
+
+
+def _fmt_last_seen_delta(timestamp_ms: int) -> str:
+    delta_ms = _elapsed_since_log_clock_ms(timestamp_ms)
+    if delta_ms >= 10**12:
         return "—"
-    total_seconds = max(0, timestamp_ms // 1000)
-    hours = (total_seconds // 3600) % 24
+    total_seconds = delta_ms // 1000
+    hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60
-    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"

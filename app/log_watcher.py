@@ -239,6 +239,18 @@ class LogWatcher(QObject):
     def stop(self) -> None:
         self._timer.stop()
 
+    def is_running(self) -> bool:
+        return self._timer.isActive()
+
+    def pause_overlay_processing(self) -> bool:
+        was_running = self._timer.isActive()
+        if was_running:
+            self._timer.stop()
+        return was_running
+
+    def resume_overlay_processing(self) -> None:
+        self.start()
+
     @property
     def session(self) -> CombatSession:
         return self._session

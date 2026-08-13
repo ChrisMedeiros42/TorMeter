@@ -3,15 +3,23 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from app.combat_session import Fight
-from app.log_parser import APPLY_EFFECT, DAMAGE, EVENT, HEAL, NPC, is_friendly_companion, is_friendly_player
+from app.log_parser import APPLY_EFFECT, DAMAGE, EVENT, NPC, is_friendly_companion, is_friendly_player
 from app.overlays_shared.player_match import player_stats_matches
 
-_DATA_PATH = Path(__file__).resolve().parents[1] / "config" / "data" / "Grudges.json"
+def _default_data_path() -> Path:
+    # Match preference persistence behavior in frozen builds (PyInstaller).
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent / "Grudges.json"
+    return Path(__file__).resolve().parents[1] / "config" / "data" / "Grudges.json"
+
+
+_DATA_PATH = _default_data_path()
 
 
 @dataclass(slots=True)
@@ -141,11 +149,16 @@ class GrudgesStore:
         self._path = path or _DATA_PATH
         self._version = 1
         self._books: dict[str, CharacterGrudgeBook] = {}
+        self._last_save_error: str | None = None
         self._load()
 
     @property
     def path(self) -> Path:
         return self._path
+
+    @property
+    def last_save_error(self) -> str | None:
+        return self._last_save_error
 
     def _load(self) -> None:
         self._books = {}
@@ -170,15 +183,21 @@ class GrudgesStore:
                         character_name, book_payload
                     )
 
-    def save(self) -> None:
+    def save(self) -> bool:
         payload = {
             "version": self._version,
             "characters": {name: book.to_dict() for name, book in self._books.items()},
         }
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._path.write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+        except OSError as exc:
+            self._last_save_error = str(exc)
+            return False
+        self._last_save_error = None
+        return True
 
     def get_book(self, character_name: str) -> CharacterGrudgeBook | None:
         return self._books.get(character_name)

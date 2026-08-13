@@ -174,12 +174,14 @@ class CombatHistoryOverlay(OverlayWindow):
         self._min_content_width = v
         if self._prefs:
             self._prefs.coh_win_width = v
+        self._sync_manual_content_size(content_w=v)
         self._resize_to_content()
 
     def apply_win_height(self, v: int) -> None:
         self._max_content_height = v
         if self._prefs:
             self._prefs.coh_win_height = v
+        self._sync_manual_content_size(content_h=v)
         self._resize_to_content()
 
     def apply_win_bg_alpha(self, v: int) -> None:

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import time
 
-from PyQt6.QtCore import Qt, QRect, QSize, QTimer
+from PyQt6.QtCore import QEvent, Qt, QRect, QSize, QTimer
 from PyQt6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPen
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -57,6 +57,8 @@ class OverlayMasterWindow(OverlayWindow):
 
     def __init__(self, prefs=None, vis_obs: "dict[str, ObservableValue] | None" = None):
         self._vis_obs_dict: dict[str, ObservableValue] = vis_obs or {}
+        self._name_edit_pause_active = False
+        self._name_edit_should_resume_watcher = False
         super().__init__(prefs)
 
     def paintEvent(self, event):
@@ -102,6 +104,7 @@ class OverlayMasterWindow(OverlayWindow):
     def _setup_content(self):
         p = self._prefs
         self._linked: dict = {}
+        self._char_name_edit: QLineEdit | None = None
         self._vis_checks: dict = {}  # key → QCheckBox for Show/Hide rows
         self._win_size_sliders: dict = {}  # key → {"width": QSlider, "height": QSlider}
         self._watcher_status_label: QLabel | None = None
@@ -133,6 +136,8 @@ class OverlayMasterWindow(OverlayWindow):
         char_l.addWidget(char_lbl)
         char_edit = QLineEdit()
         char_edit.setStyleSheet(_EDIT_STYLE)
+        self._char_name_edit = char_edit
+        char_edit.installEventFilter(self)
         if p:
             char_edit.setText(p.character_name)
 
@@ -143,9 +148,9 @@ class OverlayMasterWindow(OverlayWindow):
                 p.character_name = name
                 p.save()
             self._notify_all("apply_character_name", name)
+            self._resume_name_edit_processing()
 
         char_edit.editingFinished.connect(_save_char)
-        char_edit.returnPressed.connect(_save_char)
         char_l.addWidget(char_edit, 1)
         self._layout.addWidget(char_row)
 
@@ -3077,6 +3082,32 @@ class OverlayMasterWindow(OverlayWindow):
                 except Exception:
                     # Keep broadcasting even if one overlay fails to refresh.
                     continue
+
+    def eventFilter(self, watched, event):
+        if watched is self._char_name_edit:
+            if event.type() == QEvent.Type.FocusIn:
+                self._pause_name_edit_processing()
+            elif event.type() == QEvent.Type.FocusOut:
+                QTimer.singleShot(0, self._resume_name_edit_processing)
+        return super().eventFilter(watched, event)
+
+    def _pause_name_edit_processing(self) -> None:
+        if self._name_edit_pause_active:
+            return
+        watcher = getattr(self, "_watcher", None)
+        self._name_edit_should_resume_watcher = False
+        if watcher is not None:
+            self._name_edit_should_resume_watcher = watcher.pause_overlay_processing()
+        self._name_edit_pause_active = True
+
+    def _resume_name_edit_processing(self) -> None:
+        if not self._name_edit_pause_active:
+            return
+        watcher = getattr(self, "_watcher", None)
+        if watcher is not None and self._name_edit_should_resume_watcher:
+            watcher.resume_overlay_processing()
+        self._name_edit_pause_active = False
+        self._name_edit_should_resume_watcher = False
 
     def receive_watcher(self, watcher) -> None:
         """Store the LogWatcher so the browse button can redirect it."""

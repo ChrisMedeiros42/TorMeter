@@ -121,7 +121,15 @@ def main():
     for name, win in windows.items():
         menu.register_overlay(name, win)
 
-    sys.exit(app.exec())
+    exit_code = 0
+    try:
+        exit_code = app.exec()
+    except KeyboardInterrupt:
+        # Allow Ctrl+C to close the app cleanly without a traceback.
+        watcher.stop()
+        exit_code = 0
+
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
