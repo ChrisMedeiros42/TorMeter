@@ -1,7 +1,7 @@
 {
   "enable_hotkey": "Ctrl+Shift+F7",
   "overlay_master": {
-    "character_name": "Joosie",
+    "character_name": "Tainted Juicie",
     "log_folder": "",
     "sum_name_size": 12,
     "sum_dps_size": 12,
@@ -246,7 +246,7 @@
       "default_y": 100,
       "expand": "down",
       "anchor": "top-left",
-      "visible": true
+      "visible": false
     },
     "Combat History": {
       "x": 1262,
@@ -264,7 +264,7 @@
       "default_y": 100,
       "expand": "down",
       "anchor": "top-left",
-      "visible": true
+      "visible": false
     },
     "Nihilus' Book of Grudges": {
       "x": -2,

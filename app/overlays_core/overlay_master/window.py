@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import time
 
-from PyQt6.QtCore import QEvent, Qt, QRect, QSize, QTimer
+from PyQt6.QtCore import QEvent, QSignalBlocker, Qt, QRect, QSize, QTimer
 from PyQt6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPen
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -3051,18 +3051,38 @@ class OverlayMasterWindow(OverlayWindow):
         self._layout.addWidget(self._scroll_area)
 
     def _on_win_resized_by_user(self, win_key: str, total_w: int, total_h: int) -> None:
-        """Update OM sliders when an overlay is resized via its drag handle."""
+        """Persist a drag resize without feeding the size back into its source window."""
         from app.window import BORDER_WIDTH, CONTENT_PADDING, MENU_BAR_HEIGHT as _MBH
         co = BORDER_WIDTH + CONTENT_PADDING
         content_w = max(1, total_w - co * 2)
         content_h = max(1, total_h - _MBH - co)
         sliders = self._win_size_sliders.get(win_key, {})
-        w_slider = sliders.get("width")
-        h_slider = sliders.get("height")
-        if w_slider is not None:
-            w_slider.setValue(content_w)  # fires on_value_change → saves pref + notifies overlay
-        if h_slider is not None:
-            h_slider.setValue(content_h)
+        attr_names = {
+            "SUM": ("sum_win_width", None),
+            "DPS": ("dps_win_width", None),
+            "DEF": ("def_win_width", None),
+            "HEAL": ("heal_win_width", None),
+            "COH": ("coh_win_width", "coh_win_height"),
+            "CHT": ("cht_win_width", "cht_win_height"),
+            "NBG": ("nbg_win_width", "nbg_win_height"),
+        }
+        width_attr, height_attr = attr_names[win_key]
+        p = self._prefs
+        changed = False
+        if p is not None and getattr(p, width_attr) != content_w:
+            setattr(p, width_attr, content_w)
+            changed = True
+        if p is not None and height_attr and getattr(p, height_attr) != content_h:
+            setattr(p, height_attr, content_h)
+            changed = True
+        if changed:
+            p.save()
+
+        for slider, value in ((sliders.get("width"), content_w), (sliders.get("height"), content_h)):
+            if slider is not None:
+                with QSignalBlocker(slider):
+                    slider.setRange(min(slider.minimum(), value), max(slider.maximum(), value))
+                    slider.setValue(value)
 
     def _notify(self, win_key: str, method: str, value) -> None:
         """Forward a live setting change to a linked stat overlay."""

@@ -178,12 +178,10 @@ class OverlayWindow(QWidget):
 
     def _toggle_click_through(self):
         """
-        Ctrl+Shift+F7: disable click-through and focus window; press again to restore.
+        Ctrl+Shift+F7: toggle click-through; press again to restore.
         """
         if self._click_through:
             self._set_click_through(False)
-            self.activateWindow()
-            self.raise_()
         else:
             self._set_click_through(True)
         self.update()  # trigger repaint to show/hide border
@@ -215,24 +213,6 @@ class OverlayWindow(QWidget):
             self._programmatic_resize = False
 
         QTimer.singleShot(0, _do)
-
-    def _sync_manual_content_size(
-        self, content_w: int | None = None, content_h: int | None = None
-    ) -> None:
-        """
-        Keep the remembered drag size in step with an explicitly applied size,
-        so slider-driven shrinking is not blocked by an older manual size.
-        """
-        if self._manual_window_size is None:
-            return
-        co = BORDER_WIDTH + CONTENT_PADDING
-        w = self._manual_window_size.width()
-        h = self._manual_window_size.height()
-        if content_w is not None:
-            w = content_w + co * 2
-        if content_h is not None:
-            h = MENU_BAR_HEIGHT + content_h + co
-        self._manual_window_size = QSize(w, h)
 
     def _sync_layout_geometry(self) -> None:
         co = BORDER_WIDTH + CONTENT_PADDING
