@@ -9,13 +9,17 @@
 # ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
 
 import sys
+import traceback
+import ctypes
+from datetime import datetime
 from pathlib import Path
 
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 
 from app.charts_overlay import ChartsOverlay
 from app.combat_history_overlay import CombatHistoryOverlay
-from app.constants import DEBUG
+from app.constants import DEBUG, ICON_PATH
 from app.grudges_overlay import NihilusBookOfGrudgesOverlay
 from app.log_watcher import LogWatcher
 from app.menu import TorMeterMenu
@@ -32,8 +36,32 @@ from app.session_loader import SessionLoader
 from app.window import OverlayWindow
 
 
+def _install_excepthook():
+    """Log otherwise-silent unhandled exceptions to err_log.txt instead of crashing quietly."""
+    log_path = Path("err_log.txt")
+
+    def _handle(exc_type, exc_value, exc_tb):
+        try:
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(f"\n--- {datetime.now().isoformat()} ---\n")
+                traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+        except OSError:
+            pass
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+    sys.excepthook = _handle
+
+
 def main():
+    _install_excepthook()
+    # Without an explicit AppUserModelID, Windows groups the process under
+    # python(w).exe and shows its icon in the taskbar instead of ours.
+    if sys.platform == "win32":
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "LunarEdgeGames.TorMeter"
+        )
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon(str(ICON_PATH)))
     prefs = Preferences()
 
     # ── Observable visibility state — single source of truth ────────────────
@@ -120,6 +148,8 @@ def main():
     menu = TorMeterMenu(prefs, vis_obs)
     for name, win in windows.items():
         menu.register_overlay(name, win)
+    if hasattr(windows["Overlay Master"], "receive_menu"):
+        windows["Overlay Master"].receive_menu(menu)
 
     exit_code = 0
     try:

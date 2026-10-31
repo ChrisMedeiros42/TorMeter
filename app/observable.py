@@ -12,6 +12,7 @@ Lightweight observable value — single source of truth for shared UI state.
 
 from __future__ import annotations
 
+import traceback
 from typing import Callable, Generic, TypeVar
 
 T = TypeVar("T")
@@ -46,7 +47,12 @@ class ObservableValue(Generic[T]):
         self._notifying = True
         try:
             for cb in list(self._listeners):
-                cb(new_value)
+                try:
+                    cb(new_value)
+                except Exception:
+                    # One bad listener (e.g. a widget mid-teardown) must not
+                    # stop the rest of the cascade or crash the whole app.
+                    traceback.print_exc()
         finally:
             self._notifying = False
 

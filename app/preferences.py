@@ -11,6 +11,7 @@
 from app.config.preferences import (
     Anchor,
     DEFAULT_ENABLE_HOTKEY,
+    DEFAULT_KEYBINDS,
     DEFAULT_WINDOW_PREFS,
     Expand,
     Preferences,
@@ -25,5 +26,6 @@ __all__ = [
     "Anchor",
     "DEFAULT_WINDOW_PREFS",
     "DEFAULT_ENABLE_HOTKEY",
+    "DEFAULT_KEYBINDS",
     "WINDOW_NAMES",
 ]

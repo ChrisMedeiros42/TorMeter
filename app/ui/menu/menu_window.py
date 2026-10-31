@@ -6,13 +6,23 @@ import ctypes
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPoint, Qt
-from PyQt6.QtGui import QColor, QKeyEvent, QMouseEvent, QPainter, QPen
+from PyQt6.QtGui import QColor, QIcon, QKeyEvent, QMouseEvent, QPainter, QPen
 from PyQt6.QtWidgets import QApplication, QVBoxLayout, QWidget
 
-from app.constants import DEBUG, HOTKEY_ID, MOD_CONTROL, MOD_SHIFT, VK_F7, VK_F8, VK_F9
+from app.constants import (
+    DEBUG,
+    HOTKEY_ID,
+    HWND_TOPMOST,
+    ICON_PATH,
+    SWP_NOACTIVATE,
+    SWP_NOMOVE,
+    SWP_NOSIZE,
+)
 from app.hotkey import HotkeyFilter
+from app.keybinds import ACTION_ORDER, DEFAULT_KEYBINDS, string_to_combo
 from app.observable import ObservableValue
 from app.preferences import Preferences
+from app.screen_geometry import clamp_to_screen
 
 from .constants import ARROW_W, EXCLUDED_FROM_SHOWALL, MENU_BAR_HEIGHT, WINDOW_NAME
 from .widgets import ActionButton, MenuButton, RowButton
@@ -36,29 +46,33 @@ class TorMeterMenu(QWidget):
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.Tool
+            # No Qt.WindowType.Tool here — this is the app's only always-visible
+            # window, so it's the one that represents TorMeter in the taskbar.
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
+        self.setWindowIcon(QIcon(str(ICON_PATH)))
 
         self._hwnd = int(self.winId())
-        self._menu_hotkey_id = HOTKEY_ID + 1
-        self._restore_hotkey_id = HOTKEY_ID + 2
-        self._quit_hotkey_id = HOTKEY_ID + 3
-        ctypes.windll.user32.RegisterHotKey(
-            self._hwnd, self._menu_hotkey_id, MOD_CONTROL | MOD_SHIFT, VK_F7
-        )
-        ctypes.windll.user32.RegisterHotKey(
-            self._hwnd, self._restore_hotkey_id, MOD_CONTROL | MOD_SHIFT, VK_F8
-        )
-        ctypes.windll.user32.RegisterHotKey(
-            self._hwnd, self._quit_hotkey_id, MOD_CONTROL | MOD_SHIFT, VK_F9
-        )
+        self._hotkey_ids: dict[str, int] = {
+            action: HOTKEY_ID + 1 + i for i, action in enumerate(ACTION_ORDER)
+        }
+        self._hotkey_callbacks = {
+            "toggle_click_through": self._on_hotkey,
+            "restore_menu": self._restore_menu,
+            "quit": self._exit_all,
+            "force_foreground": self._force_foreground,
+        }
+        for action in ACTION_ORDER:
+            combo = string_to_combo(self._prefs.keybinds.get(action, DEFAULT_KEYBINDS[action]))
+            if combo is None:
+                combo = string_to_combo(DEFAULT_KEYBINDS[action])
+            mod, vk = combo
+            ctypes.windll.user32.RegisterHotKey(self._hwnd, self._hotkey_ids[action], mod, vk)
         self._hotkey_filter = HotkeyFilter(
             {
-                self._menu_hotkey_id: self._on_hotkey,
-                self._restore_hotkey_id: self._restore_menu,
-                self._quit_hotkey_id: self._exit_all,
+                hotkey_id: self._hotkey_callbacks[action]
+                for action, hotkey_id in self._hotkey_ids.items()
             }
         )
         QApplication.instance().installNativeEventFilter(self._hotkey_filter)
@@ -88,7 +102,24 @@ class TorMeterMenu(QWidget):
 
     def _apply_prefs(self):
         wp = self._prefs.get(WINDOW_NAME)
-        self.move(wp.x, wp.y)
+        x, y = clamp_to_screen(wp.x, wp.y, self.width(), self.height())
+        self.move(x, y)
+        if (x, y) != (wp.x, wp.y):
+            self._prefs.set_position(WINDOW_NAME, x, y)
+
+    def reposition_all_from_prefs(self) -> None:
+        """Move this menu and every registered overlay to its current prefs
+        position — used after switching the active display profile so open
+        windows jump to that profile's positions without needing a restart."""
+        if not self._prefs:
+            return
+        self._apply_prefs()
+        for name, win in self._overlays.items():
+            wp = self._prefs.get(name)
+            x, y = clamp_to_screen(wp.x, wp.y, win.width(), win.height())
+            win.move(x, y)
+            if (x, y) != (wp.x, wp.y):
+                self._prefs.set_position(name, x, y)
 
     def _build_ui(self):
         self._rows: dict[str, RowButton] = {}
@@ -133,8 +164,9 @@ class TorMeterMenu(QWidget):
                 win = self._overlays.get(_name)
                 if win and self._prefs:
                     wp = self._prefs.get(_name)
-                    win.move(wp.default_x, wp.default_y)
-                    self._prefs.set_position(_name, wp.default_x, wp.default_y)
+                    x, y = clamp_to_screen(wp.default_x, wp.default_y, win.width(), win.height())
+                    win.move(x, y)
+                    self._prefs.set_position(_name, x, y)
 
             return _on_reset
 
@@ -220,11 +252,62 @@ class TorMeterMenu(QWidget):
     def _restore_menu(self):
         if self._prefs:
             wp = self._prefs.get(WINDOW_NAME)
-            self.move(wp.default_x, wp.default_y)
-            self._prefs.set_position(WINDOW_NAME, wp.default_x, wp.default_y)
+            x, y = clamp_to_screen(wp.default_x, wp.default_y, self.width(), self.height())
+            self.move(x, y)
+            self._prefs.set_position(WINDOW_NAME, x, y)
         self.show()
         self.raise_()
         self.activateWindow()
+
+    def _force_foreground(self):
+        """
+        Ctrl+Shift+F2: reassert always-on-top for the menu and every overlay.
+
+        Windows can silently demote topmost windows behind other topmost
+        windows (e.g. games or other overlay apps) without clearing the
+        WS_EX_TOPMOST flag. This restores the z-order without stealing focus
+        from whatever the user is currently working in.
+        """
+        if self.isVisible():
+            ctypes.windll.user32.SetWindowPos(
+                self._hwnd,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            )
+        for win in self._overlays.values():
+            win.force_topmost()
+
+    def rebind_hotkey(self, action: str, combo_str: str) -> bool:
+        """
+        Apply a new key combination for *action* (see app.keybinds.ACTION_ORDER).
+
+        Unregisters the current binding, attempts to register the new one, and
+        reverts (keeping the old binding active) if the new combo is invalid or
+        already claimed by another application. Returns whether the change
+        succeeded.
+        """
+        combo = string_to_combo(combo_str)
+        if combo is None or action not in self._hotkey_ids:
+            return False
+        mod, vk = combo
+        hotkey_id = self._hotkey_ids[action]
+        old_combo_str = self._prefs.keybinds.get(action, DEFAULT_KEYBINDS[action])
+
+        ctypes.windll.user32.UnregisterHotKey(self._hwnd, hotkey_id)
+        ok = ctypes.windll.user32.RegisterHotKey(self._hwnd, hotkey_id, mod, vk)
+        if not ok:
+            old_mod, old_vk = string_to_combo(old_combo_str) or string_to_combo(
+                DEFAULT_KEYBINDS[action]
+            )
+            ctypes.windll.user32.RegisterHotKey(self._hwnd, hotkey_id, old_mod, old_vk)
+            return False
+
+        self._prefs.set_keybind(action, combo_str)
+        return True
 
     def _toggle_all(self):
         visible = [
@@ -274,7 +357,9 @@ class TorMeterMenu(QWidget):
 
     def mouseMoveEvent(self, event: QMouseEvent):
         if self._drag_start is not None and event.buttons() & Qt.MouseButton.LeftButton:
-            self.move(event.globalPosition().toPoint() - self._drag_start)
+            new_pos = event.globalPosition().toPoint() - self._drag_start
+            x, y = clamp_to_screen(new_pos.x(), new_pos.y(), self.width(), self.height())
+            self.move(x, y)
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
@@ -296,7 +381,7 @@ class TorMeterMenu(QWidget):
             obs.dispose()
         for win in self._overlays.values():
             win.detach_visible()
-        for hid in (self._menu_hotkey_id, self._restore_hotkey_id, self._quit_hotkey_id):
+        for hid in self._hotkey_ids.values():
             ctypes.windll.user32.UnregisterHotKey(self._hwnd, hid)
         QApplication.instance().removeNativeEventFilter(self._hotkey_filter)
         super().closeEvent(event)

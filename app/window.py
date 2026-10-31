@@ -15,11 +15,30 @@ from PyQt6.QtGui import QFont, QKeyEvent, QMouseEvent, QPainter, QColor, QPen
 
 from app.constants import (
     GWL_EXSTYLE,
+    HWND_TOPMOST,
+    SWP_NOACTIVATE,
+    SWP_NOMOVE,
+    SWP_NOSIZE,
     WS_EX_LAYERED,
     WS_EX_TRANSPARENT,
 )
 from app.observable import ObservableValue
 from app.preferences import Preferences
+from app.screen_geometry import clamp_to_screen
+
+
+def reassert_topmost(hwnd: int) -> None:
+    """
+    Push *hwnd* back to the top of the always-on-top z-order.
+
+    Windows can silently demote WS_EX_TOPMOST windows behind other topmost
+    windows (e.g. game overlays, other always-on-top apps) without clearing
+    the style flag. Re-issuing SetWindowPos with HWND_TOPMOST restores the
+    z-order without moving, resizing, or stealing input focus.
+    """
+    ctypes.windll.user32.SetWindowPos(
+        hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+    )
 
 MENU_BAR_HEIGHT = 16
 MENU_BAR_SIDE_PADDING = 1  # left and right padding
@@ -103,10 +122,11 @@ class OverlayWindow(QWidget):
         self._hwnd = int(self.winId())
         self._set_click_through(True)
 
-        # Apply saved position from preferences
+        # Apply saved position from preferences, clamped to the current viewport
         if self._prefs is not None:
             wp = self._prefs.get(self.window_name)
-            self.move(wp.x, wp.y)
+            x, y = clamp_to_screen(wp.x, wp.y, self.width(), self.height())
+            self.move(x, y)
 
     def _setup_content(self):
         """
@@ -139,8 +159,12 @@ class OverlayWindow(QWidget):
         self._vis_obs = obs
 
         def _apply_visible(visible: bool) -> None:
-            if self.isVisible() != visible:
-                self.setVisible(visible)
+            try:
+                if self.isVisible() != visible:
+                    self.setVisible(visible)
+            except RuntimeError:
+                # Underlying C++ widget already deleted (teardown race).
+                pass
 
         # Drive window from observable
         obs.subscribe(_apply_visible)
@@ -185,6 +209,13 @@ class OverlayWindow(QWidget):
         else:
             self._set_click_through(True)
         self.update()  # trigger repaint to show/hide border
+
+    def force_topmost(self) -> None:
+        """
+        Ctrl+Shift+F2: reassert always-on-top z-order for this overlay.
+        """
+        if self.isVisible():
+            reassert_topmost(self._hwnd)
 
     def _resize_to_content(self):
         """
@@ -346,7 +377,9 @@ class OverlayWindow(QWidget):
             return
 
         if self._drag_start is not None and event.buttons() & Qt.MouseButton.LeftButton:
-            self.move(event.globalPosition().toPoint() - self._drag_start)
+            new_pos = event.globalPosition().toPoint() - self._drag_start
+            x, y = clamp_to_screen(new_pos.x(), new_pos.y(), self.width(), self.height())
+            self.move(x, y)
 
         if not self._click_through and self._resize_hotzone_rect().contains(event.position().toPoint()):
             self.setCursor(Qt.CursorShape.SizeFDiagCursor)

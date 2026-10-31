@@ -12,10 +12,12 @@ from dataclasses import asdict
 from pathlib import Path
 from app.config.preferences.defaults import (
     DEFAULT_ENABLE_HOTKEY,
+    DEFAULT_KEYBINDS,
     DEFAULT_WINDOW_PREFS,
     WINDOW_NAMES,
 )
 from app.config.preferences.models import WindowPrefs
+from app.display_profile import detect_profile_key
 
 # When frozen (PyInstaller onefile), place UserPreferences.json next to the exe
 # so users can edit it directly.  In development, keep it in data/ as before.
@@ -28,6 +30,10 @@ class Preferences:
     def __init__(self):
         self._data: dict[str, WindowPrefs] = {}
         self.enable_hotkey: str = DEFAULT_ENABLE_HOTKEY
+        self.keybinds: dict[str, str] = dict(DEFAULT_KEYBINDS)
+        # profile_key ('1920x1080@100') → {window_name: {"default_x":, "default_y":}}
+        self.profiles: dict[str, dict[str, dict[str, int]]] = {}
+        self.active_profile: str = ""
         # ── Overlay Master settings ──────────────────────────────────────────
         self.character_name: str = ""
         self.log_folder: str = ""
@@ -211,6 +217,13 @@ class Preferences:
             raw = json.loads(_PREFS_PATH.read_text(encoding="utf-8"))
             windows = raw.get("windows", {})
             self.enable_hotkey = raw.get("enable_hotkey", DEFAULT_ENABLE_HOTKEY)
+            raw_keybinds = raw.get("keybinds", {})
+            self.keybinds = {
+                **DEFAULT_KEYBINDS,
+                **(raw_keybinds if isinstance(raw_keybinds, dict) else {}),
+            }
+            raw_profiles = raw.get("profiles", {})
+            self.profiles = raw_profiles if isinstance(raw_profiles, dict) else {}
             om = raw.get("overlay_master", {})
             self.character_name = om.get("character_name", "")
             self.log_folder = om.get("log_folder", "")
@@ -389,6 +402,7 @@ class Preferences:
                 self.nbg_columns_visible = {}
         else:
             windows = {}
+            self.profiles = {}
 
         for name in WINDOW_NAMES:
             entry = windows.get(name, DEFAULT_WINDOW_PREFS)
@@ -401,6 +415,68 @@ class Preferences:
                 anchor=entry.get("anchor", DEFAULT_WINDOW_PREFS["anchor"]),
                 visible=entry.get("visible", True),
             )
+
+        # ── Display profile: auto-detect and seed/apply per-environment positions ──
+        self.active_profile = detect_profile_key()
+        is_new_profile = self.active_profile not in self.profiles
+        if is_new_profile:
+            self.profiles[self.active_profile] = {
+                name: {
+                    "x": self._data[name].x,
+                    "y": self._data[name].y,
+                    "default_x": self._data[name].default_x,
+                    "default_y": self._data[name].default_y,
+                }
+                for name in WINDOW_NAMES
+            }
+        self._apply_profile(self.active_profile)
+        if is_new_profile:
+            self.save()
+
+    def _apply_profile(self, profile_key: str) -> None:
+        """Populate each window's x/y/default_x/default_y from *profile_key*.
+
+        Falls back to the profile's default position if it has no saved live
+        position yet, then to the global defaults — this lets windows load at
+        the correct spot for the active display profile before the first draw.
+        """
+        profile = self.profiles.get(profile_key, {})
+        for name in WINDOW_NAMES:
+            wp = self._data.get(name)
+            if wp is None:
+                continue
+            entry = profile.get(name, {})
+            default_x = entry.get("default_x", DEFAULT_WINDOW_PREFS["default_x"])
+            default_y = entry.get("default_y", DEFAULT_WINDOW_PREFS["default_y"])
+            wp.default_x = default_x
+            wp.default_y = default_y
+            wp.x = entry.get("x", default_x)
+            wp.y = entry.get("y", default_y)
+
+    def get_profile_keys(self) -> list[str]:
+        return sorted(self.profiles.keys())
+
+    def set_active_profile(self, profile_key: str) -> None:
+        """Switch the active display profile, applying its saved window positions."""
+        if profile_key not in self.profiles or profile_key == self.active_profile:
+            return
+        self.active_profile = profile_key
+        self._apply_profile(profile_key)
+        self.save()
+
+    def define_window_defaults_from_current(self) -> None:
+        """Snapshot each window's current position as the active profile's defaults."""
+        profile = self.profiles.setdefault(self.active_profile, {})
+        for name in WINDOW_NAMES:
+            wp = self._data.get(name)
+            if wp is None:
+                continue
+            wp.default_x = wp.x
+            wp.default_y = wp.y
+            profile[name] = {
+                "x": wp.x, "y": wp.y, "default_x": wp.x, "default_y": wp.y,
+            }
+        self.save()
 
     def get(self, window_name: str) -> WindowPrefs:
         return self._data.get(window_name, WindowPrefs(**DEFAULT_WINDOW_PREFS))
@@ -423,11 +499,24 @@ class Preferences:
                 expand="down",
                 anchor="top-left",
             )
+        # Remember this position under the active display profile too, so it's
+        # restored when this profile becomes active again later.
+        profile_entry = self.profiles.setdefault(self.active_profile, {}).setdefault(
+            window_name, {}
+        )
+        profile_entry["x"] = x
+        profile_entry["y"] = y
+        self.save()
+
+    def set_keybind(self, action: str, combo: str) -> None:
+        self.keybinds[action] = combo
         self.save()
 
     def save(self):
         payload = {
             "enable_hotkey": self.enable_hotkey,
+            "keybinds": self.keybinds,
+            "profiles": self.profiles,
             "overlay_master": {
                 "character_name": self.character_name,
                 "log_folder": self.log_folder,

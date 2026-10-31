@@ -171,6 +171,38 @@ Use a background thread for data parsing and feed updates to the UI via `QTimer`
 
 ---
 
+## Keybinds
+
+Global hotkeys are registered via the Windows API (`RegisterHotKey`) and work regardless of which application has focus.
+
+| Hotkey | Action |
+|---|---|
+| `Ctrl+Shift+F7` | Toggle click-through mode for all overlays (enables dragging/resizing/editing). |
+| `Ctrl+Shift+F8` | Restore the TorMeter menu to its default position and bring it to the foreground. |
+| `Ctrl+Shift+F9` | Exit TorMeter. |
+| `Ctrl+Shift+F2` | Force TorMeter (menu + all visible overlays) back to the top of the always-on-top z-order, without stealing input focus. Use this if the overlay gets pushed behind another window. |
+
+> Windows can silently demote `WS_EX_TOPMOST` windows behind other topmost windows (e.g. games or other always-on-top apps) without clearing the topmost flag. `Ctrl+Shift+F2` re-issues `SetWindowPos` with `HWND_TOPMOST` to restore visibility on top.
+
+### Rebinding keybinds
+
+- Each hotkey above is user-configurable from the **Keybinds** section of Overlay Master.
+- Click a keybind's button, press the new key combination, then click **OK** to apply or **Cancel** to discard.
+- A rebind is rejected (with the previous binding kept active) if the combination is invalid or already in use by another action/application.
+
+---
+
+## Display Profiles
+
+Window default positions (used by each overlay's **Reset** button in the TorMeter menu) are stored per display environment, since a layout tuned for one resolution/scale won't necessarily fit another.
+
+- A profile is keyed by the primary screen's resolution and scale (e.g. `1920x1080@100`).
+- On every launch, TorMeter detects the current profile and auto-creates it (seeded from the existing defaults) if it hasn't been seen before.
+- The **Profiles** section (bottom of Overlay Master) shows a dropdown of all known profiles, pre-selected to the one matching the current display; picking a different entry switches which profile's defaults the Reset buttons will use for the rest of the session.
+- **Define Window Defaults** snapshots every window's current position as the active profile's new defaults.
+
+---
+
 ## Troubleshooting
 
 ### `python` not found / Microsoft Store stub

@@ -1,12 +1,104 @@
 {
   "enable_hotkey": "Ctrl+Shift+F7",
+  "keybinds": {
+    "toggle_click_through": "Ctrl+Shift+F7",
+    "restore_menu": "Ctrl+Shift+F8",
+    "quit": "Ctrl+Shift+F9",
+    "force_foreground": "Ctrl+Shift+F2"
+  },
+  "profiles": {
+    "2560x1600@100": {
+      "Default Overlay": {
+        "default_x": 399,
+        "default_y": 308
+      },
+      "Overlay Master": {
+        "default_x": 1770,
+        "default_y": 0
+      },
+      "TorMeter Menu": {
+        "default_x": 2081,
+        "default_y": 0
+      },
+      "Summary": {
+        "default_x": 0,
+        "default_y": 1272
+      },
+      "DPS": {
+        "default_x": 2140,
+        "default_y": 1376
+      },
+      "Defense": {
+        "default_x": 2144,
+        "default_y": 1379
+      },
+      "Heal": {
+        "default_x": 2141,
+        "default_y": 1377
+      },
+      "Combat History": {
+        "default_x": 1405,
+        "default_y": 46
+      },
+      "Charts": {
+        "default_x": 0,
+        "default_y": 283
+      },
+      "Nihilus' Book of Grudges": {
+        "default_x": -1,
+        "default_y": 276
+      }
+    },
+    "3072x1728@125": {
+      "Default Overlay": {
+        "default_x": 399,
+        "default_y": 308
+      },
+      "Overlay Master": {
+        "default_x": 1770,
+        "default_y": 0
+      },
+      "TorMeter Menu": {
+        "default_x": 2081,
+        "default_y": 0
+      },
+      "Summary": {
+        "default_x": 0,
+        "default_y": 1272
+      },
+      "DPS": {
+        "default_x": 2140,
+        "default_y": 1376
+      },
+      "Defense": {
+        "default_x": 2144,
+        "default_y": 1379
+      },
+      "Heal": {
+        "default_x": 2141,
+        "default_y": 1377
+      },
+      "Combat History": {
+        "default_x": 1405,
+        "default_y": 46
+      },
+      "Charts": {
+        "default_x": 0,
+        "default_y": 283
+      },
+      "Nihilus' Book of Grudges": {
+        "default_x": -1,
+        "default_y": 276
+      }
+    }
+  },
   "overlay_master": {
     "character_name": "Tainted Juicie",
     "log_folder": "",
     "sum_name_size": 12,
     "sum_dps_size": 12,
     "sum_dps_show": true,
-    "sum_def_size": 12,
+    "sum_def_size": 9,
     "sum_def_show": true,
     "sum_heal_size": 12,
     "sum_heal_show": true,
@@ -58,15 +150,15 @@
     "sum_dps_bar_fg_color": "#7A2020",
     "sum_me_bg_color": "#1E90FF33",
     "sum_def_bar_fg_show": true,
-    "sum_def_bar_fg_size": 71,
+    "sum_def_bar_fg_size": 68,
     "sum_def_bar_fg_color": "#1E3A7A",
     "sum_heal_bar_fg_show": true,
     "sum_heal_bar_fg_size": 71,
     "sum_heal_bar_fg_color": "#1E6B1E",
     "sum_score_show": true,
-    "sum_score_size": 12,
+    "sum_score_size": 4,
     "sum_score_color": "#FFD700",
-    "sum_show_companions": true,
+    "sum_show_companions": false,
     "sum_row_height": 24,
     "sum_footer_value_size": 12,
     "sum_outline_show": true,
@@ -99,7 +191,7 @@
     "def_bar_border_size": 1,
     "def_bar_border_color": "#FFFFFF",
     "def_bar_bg_show": true,
-    "def_bar_bg_size": 12,
+    "def_bar_bg_size": 9,
     "def_bar_bg_color": "#FFFFFF",
     "def_bar_fg_show": true,
     "def_bar_fg_size": 71,
@@ -130,7 +222,7 @@
     "heal_score_size": 12,
     "heal_score_color": "#FFD700",
     "heal_show_companions": false,
-    "heal_row_height": 24,
+    "heal_row_height": 18,
     "heal_footer_value_size": 12,
     "heal_outline_show": true,
     "heal_outline_size": 1,
@@ -140,7 +232,7 @@
     "om_win_bg_color": "#14141E",
     "om_show_watcher_debug": false,
     "coh_win_width": 387,
-    "coh_win_height": 317,
+    "coh_win_height": 302,
     "coh_win_bg_alpha": 190,
     "coh_win_bg_color": "#000000",
     "coh_name_size": 12,
@@ -149,9 +241,9 @@
     "coh_me_bg_color": "#1E90FF33",
     "coh_list_height": 520,
     "coh_label_size": 10,
-    "coh_footer_value_size": 12,
+    "coh_footer_value_size": 6,
     "cht_win_width": 460,
-    "cht_win_height": 243,
+    "cht_win_height": 107,
     "cht_win_bg_alpha": 118,
     "cht_win_bg_color": "#000000",
     "cht_name_size": 10,
@@ -162,7 +254,7 @@
     "cht_label_size": 10,
     "cht_footer_value_size": 12,
     "nbg_win_width": 460,
-    "nbg_win_height": 282,
+    "nbg_win_height": 244,
     "nbg_win_bg_alpha": 200,
     "nbg_win_bg_color": "#000000",
     "nbg_label_size": 13,
@@ -188,89 +280,89 @@
     "Default Overlay": {
       "x": 399,
       "y": 308,
-      "default_x": 100,
-      "default_y": 100,
+      "default_x": 399,
+      "default_y": 308,
       "expand": "down",
       "anchor": "top-left",
       "visible": false
     },
     "Overlay Master": {
-      "x": 1346,
-      "y": -1,
-      "default_x": 100,
-      "default_y": 100,
+      "x": 1777,
+      "y": 0,
+      "default_x": 1770,
+      "default_y": 0,
       "expand": "down",
       "anchor": "top-left",
       "visible": false
     },
     "TorMeter Menu": {
-      "x": 1664,
+      "x": 2092,
       "y": 0,
-      "default_x": 100,
-      "default_y": 100,
+      "default_x": 2081,
+      "default_y": 0,
       "expand": "down",
       "anchor": "top-left",
       "visible": true
     },
     "Summary": {
-      "x": -3,
-      "y": 1075,
-      "default_x": 100,
-      "default_y": 100,
+      "x": 0,
+      "y": 1401,
+      "default_x": 0,
+      "default_y": 1272,
       "expand": "down",
       "anchor": "top-left",
       "visible": true
     },
     "DPS": {
-      "x": 1628,
-      "y": 1132,
-      "default_x": 100,
-      "default_y": 100,
+      "x": 2140,
+      "y": 1376,
+      "default_x": 2140,
+      "default_y": 1376,
       "expand": "down",
       "anchor": "top-left",
       "visible": false
     },
     "Defense": {
-      "x": 1628,
-      "y": 1132,
-      "default_x": 100,
-      "default_y": 100,
+      "x": 2144,
+      "y": 1379,
+      "default_x": 2144,
+      "default_y": 1379,
       "expand": "down",
       "anchor": "top-left",
       "visible": false
     },
     "Heal": {
-      "x": 1628,
-      "y": 1133,
-      "default_x": 100,
-      "default_y": 100,
+      "x": 2141,
+      "y": 1377,
+      "default_x": 2141,
+      "default_y": 1377,
       "expand": "down",
       "anchor": "top-left",
       "visible": false
     },
     "Combat History": {
-      "x": 1262,
-      "y": -1,
-      "default_x": 100,
-      "default_y": 100,
+      "x": 1405,
+      "y": 46,
+      "default_x": 1405,
+      "default_y": 46,
       "expand": "down",
       "anchor": "top-left",
       "visible": false
     },
     "Charts": {
-      "x": -2,
-      "y": 230,
-      "default_x": 100,
-      "default_y": 100,
+      "x": 0,
+      "y": 283,
+      "default_x": 0,
+      "default_y": 283,
       "expand": "down",
       "anchor": "top-left",
       "visible": false
     },
     "Nihilus' Book of Grudges": {
-      "x": -2,
-      "y": 238,
-      "default_x": 100,
-      "default_y": 100,
+      "x": -1,
+      "y": 276,
+      "default_x": -1,
+      "default_y": 276,
       "expand": "down",
       "anchor": "top-left",
       "visible": false

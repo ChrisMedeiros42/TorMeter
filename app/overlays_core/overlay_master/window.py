@@ -19,11 +19,13 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
+    QDialog,
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -33,7 +35,10 @@ from PyQt6.QtWidgets import (
 )
 
 from app.combat_session import Fight, PlayerFightStats
+from app.display_profile import format_profile_label
+from app.keybinds import ACTION_LABELS, ACTION_ORDER
 from app.observable import ObservableValue
+from app.ui.keybind_dialog import KeybindCaptureDialog
 from app.window import OverlayWindow
 
 from ..helpers import (
@@ -50,6 +55,16 @@ from ..helpers import (
     _section,
 )
 
+_COMBO_STYLE = (
+    "QComboBox { color: white; background: rgba(255,255,255,20);"
+    " border: 1px solid rgba(255,255,255,60); border-radius: 3px;"
+    " font-size: 9px; padding: 1px 4px; }"
+    "QComboBox::drop-down { width: 14px; border: none; }"
+    "QComboBox QAbstractItemView { background: rgba(20,20,30,240); color: white;"
+    " selection-background-color: rgba(30,144,255,180);"
+    " border: 1px solid rgba(255,255,255,60); font-size: 9px; }"
+)
+
 class OverlayMasterWindow(OverlayWindow):
     title = "Overlay Master"
     window_name = "Overlay Master"
@@ -59,7 +74,13 @@ class OverlayMasterWindow(OverlayWindow):
         self._vis_obs_dict: dict[str, ObservableValue] = vis_obs or {}
         self._name_edit_pause_active = False
         self._name_edit_should_resume_watcher = False
+        self._menu = None
+        self._keybind_buttons: dict[str, QPushButton] = {}
         super().__init__(prefs)
+
+    def receive_menu(self, menu) -> None:
+        """Wire the TorMeter menu so keybind edits in this window take effect live."""
+        self._menu = menu
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -3014,6 +3035,67 @@ class OverlayMasterWindow(OverlayWindow):
             "NBG", "#5A2E18", _nbg_wrapped, on_collapse_change=self._resize_to_content,
         )
 
+        # ── Keybinds section ───────────────────────────────────────────────────
+        kb_inner = QWidget()
+        kb_inner.setStyleSheet("background: transparent;")
+        kb_layout = QVBoxLayout(kb_inner)
+        kb_layout.setContentsMargins(4, 4, 4, 4)
+        kb_layout.setSpacing(4)
+        for action in ACTION_ORDER:
+            kb_row = QWidget()
+            kb_row_l = QHBoxLayout(kb_row)
+            kb_row_l.setContentsMargins(0, 0, 0, 0)
+            kb_row_l.setSpacing(6)
+            kb_lbl = QLabel(ACTION_LABELS[action])
+            kb_lbl.setStyleSheet(_LABEL_STYLE)
+            kb_row_l.addWidget(kb_lbl, 1)
+            kb_btn = QPushButton(p.keybinds.get(action, "") if p else "")
+            kb_btn.setFixedWidth(110)
+            kb_btn.setStyleSheet(_EDIT_STYLE)
+            kb_btn.clicked.connect(lambda _checked=False, _a=action: self._on_edit_keybind(_a))
+            kb_row_l.addWidget(kb_btn)
+            self._keybind_buttons[action] = kb_btn
+            kb_layout.addWidget(kb_row)
+        _kb_sec = _section(
+            "KEY", "#2A2A1A", kb_inner, on_collapse_change=self._resize_to_content,
+        )
+
+        # ── Profiles section ────────────────────────────────────────────────────
+        prof_inner = QWidget()
+        prof_inner.setStyleSheet("background: transparent;")
+        prof_layout = QVBoxLayout(prof_inner)
+        prof_layout.setContentsMargins(4, 4, 4, 4)
+        prof_layout.setSpacing(6)
+
+        prof_row = QWidget()
+        prof_row_l = QHBoxLayout(prof_row)
+        prof_row_l.setContentsMargins(0, 0, 0, 0)
+        prof_row_l.setSpacing(6)
+        prof_lbl = QLabel("Display Profile")
+        prof_lbl.setStyleSheet(_LABEL_STYLE)
+        prof_row_l.addWidget(prof_lbl, 1)
+        self._profile_combo = QComboBox()
+        self._profile_combo.setFixedWidth(140)
+        self._profile_combo.setStyleSheet(_COMBO_STYLE)
+        for _key in (p.get_profile_keys() if p else []):
+            self._profile_combo.addItem(format_profile_label(_key), _key)
+        if p:
+            _idx = self._profile_combo.findData(p.active_profile)
+            if _idx >= 0:
+                self._profile_combo.setCurrentIndex(_idx)
+        self._profile_combo.currentIndexChanged.connect(self._on_profile_selected)
+        prof_row_l.addWidget(self._profile_combo)
+        prof_layout.addWidget(prof_row)
+
+        define_defaults_btn = QPushButton("Define Window Defaults")
+        define_defaults_btn.setStyleSheet(_EDIT_STYLE)
+        define_defaults_btn.clicked.connect(self._on_define_window_defaults)
+        prof_layout.addWidget(define_defaults_btn)
+
+        _prof_sec = _section(
+            "PROF", "#1A2A2A", prof_inner, on_collapse_change=self._resize_to_content,
+        )
+
         # ── Store width/height slider refs for drag-resize → OM sync ───────────
         for _k, _g, _wr, _hr in (
             ("SUM", sum_grid, 1, None),
@@ -3042,13 +3124,17 @@ class OverlayMasterWindow(OverlayWindow):
         sec_layout.setContentsMargins(0, 0, 0, 0)
         sec_layout.setSpacing(4)
         sec_layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
-        for sec in (_sum_sec, _dps_sec, _def_sec, _heal_sec, _coh_sec, _cht_sec, _nbg_sec):
+        for sec in (
+            _sum_sec, _dps_sec, _def_sec, _heal_sec, _coh_sec, _cht_sec, _nbg_sec, _kb_sec,
+            _prof_sec,
+        ):
             sec_layout.addWidget(sec)
 
         self._sections_container = sections_container
         self._scroll_area = _AutoScrollArea()
         self._scroll_area.setWidget(sections_container)
         self._layout.addWidget(self._scroll_area)
+
 
     def _on_win_resized_by_user(self, win_key: str, total_w: int, total_h: int) -> None:
         """Persist a drag resize without feeding the size back into its source window."""
@@ -3091,6 +3177,49 @@ class OverlayMasterWindow(OverlayWindow):
             fn = getattr(win, method, None)
             if fn:
                 fn(value)
+
+    def _on_edit_keybind(self, action: str) -> None:
+        """Open the capture modal for *action* and apply the result on OK."""
+        p = self._prefs
+        current = p.keybinds.get(action, "") if p else ""
+        dlg = KeybindCaptureDialog(current, self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        combo = dlg.combo_string()
+        if not combo or combo == current:
+            return
+        if self._menu is None:
+            QMessageBox.warning(self, "Set Keybind", "Menu is not ready yet; try again.")
+            return
+        if self._menu.rebind_hotkey(action, combo):
+            self._keybind_buttons[action].setText(combo)
+        else:
+            QMessageBox.warning(
+                self,
+                "Set Keybind",
+                f"Could not bind '{combo}' — it may already be in use.",
+            )
+
+    def _on_profile_selected(self, index: int) -> None:
+        p = self._prefs
+        if p is None or index < 0:
+            return
+        key = self._profile_combo.itemData(index)
+        if key and key != p.active_profile:
+            p.set_active_profile(key)
+            if self._menu is not None:
+                self._menu.reposition_all_from_prefs()
+
+    def _on_define_window_defaults(self) -> None:
+        p = self._prefs
+        if p is None:
+            return
+        p.define_window_defaults_from_current()
+        QMessageBox.information(
+            self,
+            "Define Window Defaults",
+            f"Saved current window positions as defaults for '{format_profile_label(p.active_profile)}'.",
+        )
 
     def _notify_all(self, method: str, value) -> None:
         """Forward a live setting change to all linked overlays."""

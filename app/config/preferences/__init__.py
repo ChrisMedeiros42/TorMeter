@@ -1,6 +1,11 @@
 """Preferences configuration package."""
 
-from .defaults import DEFAULT_ENABLE_HOTKEY, DEFAULT_WINDOW_PREFS, WINDOW_NAMES
+from .defaults import (
+    DEFAULT_ENABLE_HOTKEY,
+    DEFAULT_KEYBINDS,
+    DEFAULT_WINDOW_PREFS,
+    WINDOW_NAMES,
+)
 from .manager import Preferences
 from .models import Anchor, Expand, WindowPrefs
 
@@ -11,5 +16,6 @@ __all__ = [
     "Anchor",
     "DEFAULT_WINDOW_PREFS",
     "DEFAULT_ENABLE_HOTKEY",
+    "DEFAULT_KEYBINDS",
     "WINDOW_NAMES",
 ]

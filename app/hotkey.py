@@ -7,6 +7,7 @@
 # ◥▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧▧◤
 
 import ctypes
+import traceback
 from ctypes import wintypes
 
 from PyQt6.QtCore import QAbstractNativeEventFilter
@@ -37,6 +38,11 @@ class HotkeyFilter(QAbstractNativeEventFilter):
             if msg.message == WM_HOTKEY:
                 cb = self._map.get(msg.wParam)
                 if cb is not None:
-                    cb()
+                    try:
+                        cb()
+                    except Exception:
+                        # A crash here would otherwise take down the whole native
+                        # event loop (and the app) with no traceback surfacing.
+                        traceback.print_exc()
                     return True, 0
         return False, 0

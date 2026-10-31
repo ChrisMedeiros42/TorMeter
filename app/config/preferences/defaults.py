@@ -13,6 +13,13 @@ DEFAULT_WINDOW_PREFS: dict = {
 
 DEFAULT_ENABLE_HOTKEY = "Ctrl+Shift+F7"
 
+DEFAULT_KEYBINDS: dict = {
+    "toggle_click_through": "Ctrl+Shift+F7",
+    "restore_menu": "Ctrl+Shift+F8",
+    "quit": "Ctrl+Shift+F9",
+    "force_foreground": "Ctrl+Shift+F2",
+}
+
 WINDOW_NAMES = [
     "Default Overlay",
     "Overlay Master",
